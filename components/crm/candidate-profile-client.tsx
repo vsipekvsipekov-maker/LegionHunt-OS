@@ -149,7 +149,19 @@ export function CandidateProfileClient({ candidate, displayName }: Props) {
     }
   }
 
-  async function generateAiRecommendation() {
+  async function generateAiRecommendation() {function saveAiToNote() {
+  if (!aiAnswer) return
+
+  setForm((current) => ({
+    ...current,
+    note:
+      current.note.trim().length > 0
+        ? `${current.note}\n\n──────── AI ────────\n${aiAnswer}`
+        : aiAnswer,
+  }))
+
+  setSaveMessage("AI-рекомендация добавлена в заметку. Нажмите «Сохранить изменения».")
+}
     setAiLoading(true)
     setAiAnswer("")
     setError("")
