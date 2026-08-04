@@ -1,0 +1,3 @@
+import { NextRequest, NextResponse } from "next/server"
+import { db, ensureCrmSchema } from "@/lib/db"
+export async function GET(request:NextRequest){try{await ensureCrmSchema();const user=request.nextUrl.searchParams.get("user")?.trim()||"VSIPEK";const result=await db.query(`SELECT x.id::int,x.course_id::int AS "courseId",c.title AS "courseTitle",x.issued_at AS "issuedAt",x.certificate_code AS "certificateCode" FROM legionhunt_academy_certificates x JOIN legionhunt_academy_courses c ON c.id=x.course_id WHERE x.user_name=$1 ORDER BY x.issued_at DESC`,[user]);return NextResponse.json({certificates:result.rows})}catch(error){console.error(error);return NextResponse.json({error:"Не удалось загрузить сертификаты."},{status:500})}}

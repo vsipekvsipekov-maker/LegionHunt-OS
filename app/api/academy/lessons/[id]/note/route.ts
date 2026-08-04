@@ -1,0 +1,3 @@
+import { NextRequest, NextResponse } from "next/server"
+import { db, ensureCrmSchema } from "@/lib/db"
+export async function PUT(request:NextRequest,context:{params:Promise<{id:string}>}){try{await ensureCrmSchema();const {id}=await context.params;const body=await request.json() as {note?:string;userName?:string};const user=body.userName?.trim()||"VSIPEK";const note=(body.note||'').slice(0,10000);await db.query(`INSERT INTO legionhunt_academy_notes(user_name,lesson_id,note) VALUES($1,$2,$3) ON CONFLICT(user_name,lesson_id) DO UPDATE SET note=EXCLUDED.note,updated_at=NOW()`,[user,Number(id),note]);return NextResponse.json({ok:true})}catch(error){console.error(error);return NextResponse.json({error:"Не удалось сохранить заметку."},{status:500})}}
