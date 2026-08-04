@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { redirect } from "next/navigation"
 
 import {
   BrainIcon,
@@ -10,8 +9,8 @@ import {
   WalletIcon,
 } from "@/components/icons"
 import { DashboardShell } from "@/components/layout/shell"
+import { requireUser } from "@/lib/auth"
 import { db, ensureCrmSchema } from "@/lib/db"
-import { createClient } from "@/lib/supabase-server"
 
 const quickActions = [
   {
@@ -41,21 +40,7 @@ const quickActions = [
 ]
 
 export default async function Home() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect("/login")
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
-    .maybeSingle()
+  const currentUser = await requireUser()
 
   await ensureCrmSchema()
 
@@ -67,6 +52,11 @@ export default async function Home() {
   const candidatesCount = Number(
     candidatesResult.rows[0]?.count ?? 0,
   )
+
+  const displayName =
+    currentUser.fullName?.trim() ||
+    currentUser.email?.split("@")[0] ||
+    "пользователь"
 
   const metrics = [
     {
@@ -98,11 +88,6 @@ export default async function Home() {
       href: "/finance",
     },
   ]
-
-  const displayName =
-    profile?.full_name?.trim() ||
-    user.email?.split("@")[0] ||
-    "пользователь"
 
   return (
     <DashboardShell>
@@ -170,7 +155,9 @@ export default async function Home() {
           <div className="lh-card p-6 sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="lh-eyebrow">Обзор</p>
+                <p className="lh-eyebrow">
+                  Обзор
+                </p>
 
                 <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
                   Активность системы
@@ -266,7 +253,9 @@ export default async function Home() {
           <div className="lh-card p-6 sm:p-7">
             <div className="flex items-center justify-between">
               <div>
-                <p className="lh-eyebrow">Журнал</p>
+                <p className="lh-eyebrow">
+                  Журнал
+                </p>
 
                 <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
                   Последняя активность

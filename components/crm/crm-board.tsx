@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import {
   ArrowUpRightIcon,
@@ -934,7 +935,11 @@ function CandidateCard({
             : "border-white/[0.06] bg-white/[0.025] hover:border-white/[0.11] hover:bg-white/[0.045]",
       ].join(" ")}
     >
-      <button type="button" onClick={onSelect} className="w-full text-left">
+      <Link
+        href={`/crm/${candidate.id}`}
+        onClick={onSelect}
+        className="block w-full text-left"
+      >
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/70 to-fuchsia-500/70 text-[10px] font-bold text-white">
             {initials(candidate.name)}
@@ -980,7 +985,7 @@ function CandidateCard({
             </p>
           </div>
         </div>
-      </button>
+      </Link>
 
       <div className="mt-3 flex items-center justify-between border-t border-white/[0.05] pt-2">
         <span className="text-[9px] text-white/18">
@@ -1457,12 +1462,12 @@ function CandidateDetails({ candidate }: { candidate: Candidate }) {
       </div>
 
       <div className="border-t border-white/[0.065] p-4">
-        <button
-          type="button"
-          className="h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.035] text-xs text-white/55 transition hover:bg-white/[0.07] hover:text-white"
+        <Link
+          href={`/crm/${candidate.id}`}
+          className="flex h-10 w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-xs text-white/55 transition hover:bg-white/[0.07] hover:text-white"
         >
           Открыть полную карточку
-        </button>
+        </Link>
       </div>
     </div>
   )
