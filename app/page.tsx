@@ -9,8 +9,41 @@ import {
   WalletIcon,
 } from "@/components/icons"
 import { DashboardShell } from "@/components/layout/shell"
+import { CrmFunnelChart } from "@/components/dashboard/crm-funnel-chart"
 import { requireUser } from "@/lib/auth"
 import { db, ensureCrmSchema } from "@/lib/db"
+
+type StageRow = {
+  status: string
+  count: string
+}
+
+type DashboardCandidate = {
+  id: string
+  name: string
+  username: string
+  status: string
+  priority: string
+  next_action: string
+  next_contact_at: string | null
+  updated_at: string
+}
+
+type DailyRow = {
+  day: string
+  count: string
+}
+
+const statusLabels: Record<string, string> = {
+  new: "Новые",
+  contact: "В работе",
+  call: "Созвон",
+  training: "Обучение",
+  active: "Активные",
+  lost: "Потерянные",
+}
+
+const statusOrder = ["new", "contact", "call", "training", "active", "lost"]
 
 const quickActions = [
   {
@@ -39,19 +72,106 @@ const quickActions = [
   },
 ]
 
+function formatDate(value: string | null) {
+  if (!value) return "Дата не назначена"
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return "Некорректная дата"
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date)
+}
+
 export default async function Home() {
   const currentUser = await requireUser()
 
   await ensureCrmSchema()
 
-  const candidatesResult = await db.query<{ count: string }>(`
-    SELECT COUNT(*)::text AS count
-    FROM legionhunt_candidates
-  `)
+  const [stageResult, overdueResult, upcomingResult, recentResult, dailyResult] =
+    await Promise.all([
+      db.query<StageRow>(`
+        SELECT status, COUNT(*)::text AS count
+        FROM legionhunt_candidates
+        GROUP BY status
+      `),
+      db.query<{ count: string }>(`
+        SELECT COUNT(*)::text AS count
+        FROM legionhunt_candidates
+        WHERE next_contact_at IS NOT NULL
+          AND next_contact_at < NOW()
+          AND status <> 'active'
+      `),
+      db.query<DashboardCandidate>(`
+        SELECT
+          id::text,
+          name,
+          username,
+          status,
+          priority,
+          next_action,
+          next_contact_at::text,
+          updated_at::text
+        FROM legionhunt_candidates
+        WHERE next_contact_at IS NOT NULL
+          AND next_contact_at >= NOW()
+        ORDER BY next_contact_at ASC
+        LIMIT 5
+      `),
+      db.query<DashboardCandidate>(`
+        SELECT
+          id::text,
+          name,
+          username,
+          status,
+          priority,
+          next_action,
+          next_contact_at::text,
+          updated_at::text
+        FROM legionhunt_candidates
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 6
+      `),
+      db.query<DailyRow>(`
+        SELECT
+          TO_CHAR(day_series.day, 'DD.MM') AS day,
+          COUNT(c.id)::text AS count
+        FROM generate_series(
+          CURRENT_DATE - INTERVAL '6 days',
+          CURRENT_DATE,
+          INTERVAL '1 day'
+        ) AS day_series(day)
+        LEFT JOIN legionhunt_candidates c
+          ON c.created_at >= day_series.day
+         AND c.created_at < day_series.day + INTERVAL '1 day'
+        GROUP BY day_series.day
+        ORDER BY day_series.day
+      `),
+    ])
 
-  const candidatesCount = Number(
-    candidatesResult.rows[0]?.count ?? 0,
+  const stageCounts = new Map(
+    stageResult.rows.map((row) => [row.status, Number(row.count)]),
   )
+
+  const totalCandidates = Array.from(stageCounts.values()).reduce(
+    (total, count) => total + count,
+    0,
+  )
+
+  const activeCount = stageCounts.get("active") ?? 0
+  const trainingCount = stageCounts.get("training") ?? 0
+  const overdueCount = Number(overdueResult.rows[0]?.count ?? 0)
+
+  const conversion =
+    totalCandidates > 0
+      ? Math.round((activeCount / totalCandidates) * 100)
+      : 0
 
   const displayName =
     currentUser.fullName?.trim() ||
@@ -60,58 +180,65 @@ export default async function Home() {
 
   const metrics = [
     {
-      label: "Активные кандидаты",
-      value: String(candidatesCount),
-      note: "Данные из CRM",
+      label: "Всего кандидатов",
+      value: String(totalCandidates),
+      note: "Все записи в CRM",
       icon: UsersIcon,
       href: "/crm",
     },
     {
-      label: "Конверсия",
-      value: "0%",
-      note: "Появится после переходов кандидатов",
+      label: "Конверсия в активные",
+      value: `${conversion}%`,
+      note: `${activeCount} активных участников`,
       icon: ChartIcon,
       href: "/analytics",
     },
     {
-      label: "AI-запросы сегодня",
-      value: "0",
-      note: "История появится после диалогов",
+      label: "В обучении",
+      value: String(trainingCount),
+      note: "Текущий этап Academy",
       icon: BrainIcon,
-      href: "/ai",
+      href: "/academy",
     },
     {
-      label: "Баланс",
-      value: "€0",
-      note: "Finance начинает работу с нуля",
-      icon: WalletIcon,
-      href: "/finance",
+      label: "Просрочено контактов",
+      value: String(overdueCount),
+      note: overdueCount ? "Требуют внимания" : "Всё под контролем",
+      icon: CalendarIcon,
+      href: "/crm",
     },
   ]
+
+  const funnelStages = statusOrder.map((status) => ({
+    key: status,
+    label: statusLabels[status] ?? status,
+    value: stageCounts.get(status) ?? 0,
+  }))
+
+  const dailyGrowth = dailyResult.rows.map((row) => ({
+    label: row.day,
+    value: Number(row.count),
+  }))
 
   return (
     <DashboardShell>
       <div className="lh-page">
         <section className="flex flex-col gap-6 border-b border-white/8 pb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="lh-eyebrow">
-              LegionHunt Command Center
-            </p>
+            <p className="lh-eyebrow">LegionHunt Command Center</p>
 
             <h1 className="lh-title mt-3">
               Добро пожаловать, {displayName}
             </h1>
 
             <p className="lh-subtitle">
-              Единый центр управления командой, кандидатами,
-              знаниями, финансами и AI. Показатели работают
-              с реальными данными системы.
+              Живой обзор CRM, воронки, контактов и активности команды.
             </p>
           </div>
 
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-4 py-2.5 text-xs font-medium text-white/55">
-            <span className="size-1.5 rounded-full bg-white" />
-            Рабочее пространство готово
+            <span className="size-1.5 rounded-full bg-emerald-300" />
+            Данные синхронизированы
           </div>
         </section>
 
@@ -155,77 +282,153 @@ export default async function Home() {
           <div className="lh-card p-6 sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="lh-eyebrow">
-                  Обзор
-                </p>
-
+                <p className="lh-eyebrow">CRM Analytics</p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-                  Активность системы
+                  Воронка кандидатов
                 </h2>
               </div>
 
               <Link
-                href="/analytics"
+                href="/crm"
                 className="text-sm text-white/40 transition hover:text-white"
               >
-                Analytics ↗
+                Открыть CRM ↗
               </Link>
             </div>
 
-            <div className="lh-empty mt-7">
-              <ChartIcon className="size-7 text-white/28" />
-
-              <h3 className="mt-4 text-lg font-semibold text-white">
-                Пока нет данных для графика
-              </h3>
-
-              <p className="mt-2 max-w-md text-sm leading-6 text-white/38">
-                График появится после накопления действий в CRM,
-                Team, Finance и других модулях.
-              </p>
-            </div>
+            <CrmFunnelChart
+              stages={funnelStages}
+              dailyGrowth={dailyGrowth}
+            />
           </div>
 
           <div className="lh-card p-6 sm:p-7">
-            <p className="lh-eyebrow">
-              LEGION Intelligence
-            </p>
+            <p className="lh-eyebrow">LEGION Intelligence</p>
 
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-              AI Center
+              Оперативная сводка
             </h2>
 
-            <p className="mt-3 text-sm leading-6 text-white/42">
-              Используйте AI для поиска по Wiki, разбора CRM
-              и подготовки следующих действий.
-            </p>
+            <div className="mt-5 space-y-3 text-sm leading-6 text-white/48">
+              <p>
+                В CRM находится <strong className="text-white">{totalCandidates}</strong>{" "}
+                кандидатов.
+              </p>
+              <p>
+                В активную команду перешли{" "}
+                <strong className="text-white">{activeCount}</strong>, текущая
+                конверсия — <strong className="text-white">{conversion}%</strong>.
+              </p>
+              <p>
+                Просроченных контактов:{" "}
+                <strong className={overdueCount ? "text-rose-300" : "text-emerald-300"}>
+                  {overdueCount}
+                </strong>.
+              </p>
+            </div>
 
             <Link
               href="/ai"
-              className="mt-7 flex min-h-32 flex-col justify-between rounded-3xl bg-white p-5 text-black transition hover:bg-white/90"
+              className="mt-7 flex min-h-28 flex-col justify-between rounded-3xl bg-white p-5 text-black transition hover:bg-white/90"
             >
               <BrainIcon className="size-6" />
-
               <div>
-                <p className="text-lg font-semibold">
-                  Открыть AI Center
-                </p>
-
+                <p className="text-lg font-semibold">Открыть AI Center</p>
                 <p className="mt-1 text-sm text-black/55">
-                  Начать новый диалог →
+                  Получить расширенный анализ →
                 </p>
               </div>
             </Link>
           </div>
         </section>
 
-        <section className="mt-5 grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
           <div className="lh-card p-6 sm:p-7">
-            <p className="lh-eyebrow">
-              Быстрые действия
-            </p>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="lh-eyebrow">Контакты</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                  Ближайшие действия
+                </h2>
+              </div>
+              <CalendarIcon className="size-6 text-white/25" />
+            </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            <div className="mt-6 space-y-3">
+              {upcomingResult.rows.map((candidate) => (
+                <Link
+                  key={candidate.id}
+                  href={`/crm/${candidate.id}`}
+                  className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 transition hover:bg-white/[0.055]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {candidate.name}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-white/32">
+                      {candidate.next_action || "Связаться с кандидатом"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs text-white/38">
+                    {formatDate(candidate.next_contact_at)}
+                  </span>
+                </Link>
+              ))}
+
+              {!upcomingResult.rows.length && (
+                <div className="lh-empty min-h-40">
+                  <CalendarIcon className="size-6 text-white/25" />
+                  <p className="mt-3 text-sm text-white/35">
+                    Ближайшие контакты не назначены.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lh-card p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="lh-eyebrow">Журнал</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                  Последние изменения
+                </h2>
+              </div>
+              <ChartIcon className="size-6 text-white/25" />
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {recentResult.rows.map((candidate) => (
+                <Link
+                  key={candidate.id}
+                  href={`/crm/${candidate.id}`}
+                  className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 transition hover:bg-white/[0.055]"
+                >
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-xs font-semibold text-white/70">
+                    {candidate.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {candidate.name}
+                    </p>
+                    <p className="mt-1 text-xs text-white/30">
+                      Этап: {statusLabels[candidate.status] ?? candidate.status}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs text-white/25">
+                    {formatDate(candidate.updated_at)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-5">
+          <div className="lh-card p-6 sm:p-7">
+            <p className="lh-eyebrow">Быстрые действия</p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {quickActions.map((action) => {
                 const Icon = action.icon
 
@@ -236,44 +439,15 @@ export default async function Home() {
                     className="rounded-2xl border border-white/9 bg-white/[0.025] p-4 transition hover:border-white/18 hover:bg-white/[0.055]"
                   >
                     <Icon className="size-5 text-white/58" />
-
                     <p className="mt-4 text-sm font-semibold text-white">
                       {action.label}
                     </p>
-
                     <p className="mt-1 text-xs leading-5 text-white/32">
                       {action.description}
                     </p>
                   </Link>
                 )
               })}
-            </div>
-          </div>
-
-          <div className="lh-card p-6 sm:p-7">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="lh-eyebrow">
-                  Журнал
-                </p>
-
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-                  Последняя активность
-                </h2>
-              </div>
-            </div>
-
-            <div className="lh-empty mt-6 min-h-56">
-              <CalendarIcon className="size-7 text-white/28" />
-
-              <h3 className="mt-4 text-lg font-semibold text-white">
-                Действий пока нет
-              </h3>
-
-              <p className="mt-2 max-w-md text-sm leading-6 text-white/38">
-                Здесь будут отображаться реальные изменения
-                в CRM, Wiki, Team, Finance и Calendar.
-              </p>
             </div>
           </div>
         </section>
