@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
+
 import {
   AutomationIcon,
   BookIcon,
@@ -21,42 +22,87 @@ const groups = [
   {
     label: "Главное",
     items: [
-      { label: "Dashboard", icon: GridIcon, href: "/" },
-      { label: "AI Center", icon: BrainIcon, href: "/ai", meta: "AI" },
-      { label: "CRM", icon: UsersIcon, href: "/crm" },
-      { label: "Wiki", icon: BookIcon, href: "/wiki" },
-      { label: "Academy", icon: GraduationIcon, href: "/academy" },
+      {
+        label: "Dashboard",
+        icon: GridIcon,
+        href: "/",
+      },
+      {
+        label: "AI Center",
+        icon: BrainIcon,
+        href: "/ai",
+        meta: "AI",
+      },
+      {
+        label: "CRM",
+        icon: UsersIcon,
+        href: "/crm",
+      },
+      {
+        label: "Wiki",
+        icon: BookIcon,
+        href: "/wiki",
+      },
+      {
+        label: "Academy",
+        icon: GraduationIcon,
+        href: "/academy",
+      },
     ],
   },
   {
     label: "Управление",
     items: [
-      { label: "Analytics", icon: ChartIcon, href: "/analytics" },
-      { label: "Automation", icon: AutomationIcon, href: "/workflows" },
-      { label: "Finance", icon: WalletIcon, href: "/finance" },
-      { label: "Team", icon: TeamIcon, href: "/team" },
-      { label: "Calendar", icon: CalendarIcon, href: "/calendar" },
+      {
+        label: "Analytics",
+        icon: ChartIcon,
+        href: "/analytics",
+      },
+      {
+        label: "Automation",
+        icon: AutomationIcon,
+        href: "/workflows",
+      },
+      {
+        label: "Finance",
+        icon: WalletIcon,
+        href: "/finance",
+      },
+      {
+        label: "Team",
+        icon: TeamIcon,
+        href: "/team",
+      },
+      {
+        label: "Calendar",
+        icon: CalendarIcon,
+        href: "/calendar",
+      },
     ],
   },
 ]
 
 type SidebarContentProps = {
   collapsed?: boolean
-  onNavigate?: () => void
   mobile?: boolean
+  onNavigate?: () => void
 }
 
 function SidebarContent({
   collapsed = false,
-  onNavigate,
   mobile = false,
+  onNavigate,
 }: SidebarContentProps) {
   const pathname = usePathname()
 
   return (
     <>
       <div className="flex h-16 items-center justify-between border-b border-white/8 px-4 sm:h-20 sm:px-5">
-        <Link href="/" onClick={onNavigate} className="flex min-w-0 items-center gap-3.5">
+        <Link
+          href="/"
+          onClick={onNavigate}
+          className="flex min-w-0 items-center gap-3.5"
+        >
           <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white text-[11px] font-black tracking-[-0.08em] text-black shadow-[0_12px_32px_rgba(255,255,255,0.08)]">
             LH
           </div>
@@ -66,6 +112,7 @@ function SidebarContent({
               <p className="truncate text-[15px] font-semibold tracking-[-0.03em] text-white">
                 LegionHunt
               </p>
+
               <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-white/35">
                 Operating System
               </p>
@@ -87,7 +134,10 @@ function SidebarContent({
 
       <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-5 sm:py-6">
         {groups.map((group, groupIndex) => (
-          <div key={group.label} className={groupIndex ? "mt-7 sm:mt-8" : ""}>
+          <div
+            key={group.label}
+            className={groupIndex > 0 ? "mt-7 sm:mt-8" : ""}
+          >
             {!collapsed && (
               <p className="mb-2.5 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/28">
                 {group.label}
@@ -118,6 +168,7 @@ function SidebarContent({
                     {!collapsed && (
                       <>
                         <span className="flex-1">{item.label}</span>
+
                         {item.meta && (
                           <span
                             className={
@@ -152,6 +203,7 @@ function SidebarContent({
           ].join(" ")}
         >
           <SettingsIcon className="size-[19px]" />
+
           {!collapsed && <span>Settings</span>}
         </Link>
       </div>
@@ -160,7 +212,6 @@ function SidebarContent({
 }
 
 export function Sidebar() {
-  const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -169,15 +220,18 @@ export function Sidebar() {
       setMobileOpen(true)
     }
 
-    window.addEventListener("legionhunt:open-mobile-menu", openMobileMenu)
+    window.addEventListener(
+      "legionhunt:open-mobile-menu",
+      openMobileMenu,
+    )
+
     return () => {
-      window.removeEventListener("legionhunt:open-mobile-menu", openMobileMenu)
+      window.removeEventListener(
+        "legionhunt:open-mobile-menu",
+        openMobileMenu,
+      )
     }
   }, [])
-
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [pathname])
 
   useEffect(() => {
     if (!mobileOpen) {
@@ -201,6 +255,10 @@ export function Sidebar() {
     }
   }, [mobileOpen])
 
+  function closeMobileMenu() {
+    setMobileOpen(false)
+  }
+
   return (
     <>
       <aside
@@ -215,7 +273,9 @@ export function Sidebar() {
         <div className="border-t border-white/8 p-3">
           <button
             type="button"
-            onClick={() => setCollapsed((value) => !value)}
+            onClick={() => {
+              setCollapsed((value) => !value)
+            }}
             className="flex h-10 w-full items-center justify-center rounded-xl border border-white/8 bg-white/[0.025] text-xs text-white/38 transition hover:bg-white/[0.07] hover:text-white"
           >
             {collapsed ? "→" : "Свернуть меню"}
@@ -223,23 +283,30 @@ export function Sidebar() {
         </div>
       </aside>
 
-      <div
+      <button
+        type="button"
+        aria-label="Закрыть мобильное меню"
+        tabIndex={mobileOpen ? 0 : -1}
+        onClick={closeMobileMenu}
         className={[
           "fixed inset-0 z-40 bg-black/70 backdrop-blur-sm transition-opacity duration-200 lg:hidden",
-          mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
+          mobileOpen
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0",
         ].join(" ")}
-        onClick={() => setMobileOpen(false)}
-        aria-hidden="true"
       />
 
       <aside
+        aria-hidden={!mobileOpen}
         className={[
           "fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] flex-col border-r border-white/10 bg-[#080808]/98 shadow-2xl backdrop-blur-2xl transition-transform duration-300 ease-out lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
-        aria-hidden={!mobileOpen}
       >
-        <SidebarContent mobile onNavigate={() => setMobileOpen(false)} />
+        <SidebarContent
+          mobile
+          onNavigate={closeMobileMenu}
+        />
       </aside>
     </>
   )

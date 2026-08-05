@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { BrainIcon } from "@/components/icons"
 
 type AiData = {
@@ -11,11 +11,7 @@ export function AiDashboard() {
   const [loading, setLoading] = useState(true)
   const [answer, setAnswer] = useState("")
 
-  useEffect(() => {
-    load()
-  }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const res = await fetch("/api/ai", {
         method: "POST",
@@ -47,16 +43,20 @@ export function AiDashboard() {
       setAnswer(data.answer ?? "Нет данных.")
     } catch {
       setAnswer("AI сейчас недоступен.")
+    } finally {
+      setLoading(false)
     }
+  }, [])
 
-    setLoading(false)
-  }
+  useEffect(() => {
+    void load()
+  }, [load])
 
   return (
     <div className="rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/5 p-6">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="mb-4 flex items-center gap-2">
         <BrainIcon className="size-5 text-violet-300" />
-        <h3 className="text-white font-semibold">
+        <h3 className="font-semibold text-white">
           LEGION Intelligence
         </h3>
       </div>
