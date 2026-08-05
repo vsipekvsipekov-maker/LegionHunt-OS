@@ -15,6 +15,19 @@ export type CurrentUser = {
   role: AppRole
 }
 
+function normalizeRole(value: unknown): AppRole {
+  if (
+    value === "owner" ||
+    value === "admin" ||
+    value === "mentor" ||
+    value === "recruiter"
+  ) {
+    return value
+  }
+
+  return "recruiter"
+}
+
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const supabase = await createClient()
 
@@ -32,13 +45,30 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     .eq("id", user.id)
     .maybeSingle()
 
-  const role = profile?.role as AppRole | undefined
+  const metadataFullName =
+    typeof user.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name.trim()
+      : ""
+
+  const firstName =
+    typeof user.user_metadata?.first_name === "string"
+      ? user.user_metadata.first_name.trim()
+      : ""
+
+  const lastName =
+    typeof user.user_metadata?.last_name === "string"
+      ? user.user_metadata.last_name.trim()
+      : ""
+
+  const metadataName =
+    metadataFullName ||
+    [firstName, lastName].filter(Boolean).join(" ")
 
   return {
     id: user.id,
     email: user.email ?? null,
-    fullName: profile?.full_name ?? null,
-    role: role ?? "recruiter",
+    fullName: profile?.full_name?.trim() || metadataName || null,
+    role: normalizeRole(profile?.role),
   }
 }
 

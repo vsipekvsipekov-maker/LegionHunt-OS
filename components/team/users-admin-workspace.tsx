@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 
-type UserRole = "owner" | "admin" | "mentor" | "manager" | "user"
+type UserRole = "owner" | "admin" | "mentor" | "recruiter"
 
 type UserProfile = {
   id: string
@@ -325,24 +325,20 @@ export function UsersAdminWorkspace() {
                         }
                         className="min-w-36 rounded-lg border border-white/[0.08] bg-[#11151d] px-2.5 py-2 text-xs text-white/70 outline-none transition focus:border-violet-400/45 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <option value="user">
-                          Пользователь
+                        <option value="recruiter">
+                          Recruiter
                         </option>
 
                         <option value="mentor">
-                          Наставник
-                        </option>
-
-                        <option value="manager">
-                          Менеджер
+                          Mentor
                         </option>
 
                         <option value="admin">
-                          Администратор
+                          Admin
                         </option>
 
                         <option value="owner">
-                          Владелец
+                          Owner
                         </option>
                       </select>
                     </td>

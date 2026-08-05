@@ -2,8 +2,59 @@
 
 import { SearchIcon } from "@/components/icons"
 import { NotificationsCenter } from "@/components/notifications/notifications-center"
+import type { AppRole } from "@/lib/auth"
 
-export function Topbar() {
+type TopbarUser = {
+  email: string | null
+  fullName: string | null
+  role: AppRole
+}
+
+type TopbarProps = {
+  user: TopbarUser
+}
+
+const roleLabels: Record<AppRole, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  mentor: "Mentor",
+  recruiter: "Recruiter",
+}
+
+function getDisplayName(user: TopbarUser) {
+  const fullName = user.fullName?.trim()
+
+  if (fullName) {
+    return fullName
+  }
+
+  const emailName = user.email?.split("@")[0]?.trim()
+
+  return emailName || "Пользователь"
+}
+
+function getInitials(name: string) {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (!parts.length) {
+    return "LH"
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase()
+}
+
+export function Topbar({ user }: TopbarProps) {
+  const displayName = getDisplayName(user)
+  const initials = getInitials(displayName)
+  const roleLabel = roleLabels[user.role] ?? "Recruiter"
+
   function openSearch() {
     window.dispatchEvent(new Event("legionhunt:open-command"))
   }
@@ -43,7 +94,9 @@ export function Topbar() {
           className="hidden h-12 w-[430px] max-w-[44vw] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-left transition hover:border-white/20 hover:bg-white/[0.06] md:flex"
         >
           <SearchIcon className="size-[18px] text-white/38" />
-          <span className="flex-1 text-[15px] text-white/35">Поиск по LegionHunt</span>
+          <span className="flex-1 text-[15px] text-white/35">
+            Поиск по LegionHunt
+          </span>
           <kbd className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-[10px] text-white/38">
             Ctrl K
           </kbd>
@@ -60,15 +113,20 @@ export function Topbar() {
 
         <button
           type="button"
-          className="flex h-11 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-2 transition hover:bg-white/[0.07] sm:h-12 sm:px-2.5 sm:pr-3.5"
+          aria-label={`Профиль: ${displayName}, роль ${roleLabel}`}
+          className="flex h-11 min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-2 transition hover:bg-white/[0.07] sm:h-12 sm:px-2.5 sm:pr-3.5"
         >
-          <div className="flex size-8 items-center justify-center rounded-xl bg-white text-[10px] font-black text-black">
-            VS
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white text-[10px] font-black text-black">
+            {initials}
           </div>
 
-          <div className="hidden text-left sm:block">
-            <p className="text-[13px] font-semibold text-white">VSIPEK</p>
-            <p className="mt-0.5 text-[10px] text-white/38">Leader</p>
+          <div className="hidden min-w-0 max-w-[180px] text-left sm:block">
+            <p className="truncate text-[13px] font-semibold text-white">
+              {displayName}
+            </p>
+            <p className="mt-0.5 text-[10px] text-white/38">
+              {roleLabel}
+            </p>
           </div>
         </button>
       </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 
 type Member = {
@@ -53,7 +54,7 @@ function StatCard({ label, value, note }: { label: string; value: string | numbe
   )
 }
 
-export function TeamWorkspace() {
+export function TeamWorkspace({ canManageRoles }: { canManageRoles: boolean }) {
   const [members, setMembers] = useState<Member[]>([])
   const [stats, setStats] = useState({ total: 0, online: 0, mentors: 0, students: 0, average_kpi: 0, averageProgress: 0 })
   const [activity, setActivity] = useState<Array<{ id: string; title: string; description: string; memberName: string; createdAt: string }>>([])
@@ -163,7 +164,15 @@ export function TeamWorkspace() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canManageRoles && (
+            <Link
+              href="/team/users"
+              className="rounded-xl border border-violet-400/20 bg-violet-400/10 px-4 py-2.5 text-sm font-medium text-violet-200 transition hover:bg-violet-400/15"
+            >
+              Управление ролями
+            </Link>
+          )}
           <button className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-sm text-white/65 transition hover:bg-white/[0.07]">Оргструктура</button>
           <button className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-medium text-white shadow-[0_0_25px_rgba(139,92,246,.25)]">+ Участник</button>
         </div>
