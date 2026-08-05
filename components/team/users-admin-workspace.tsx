@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react"
 
+type UserRole = "owner" | "admin" | "mentor" | "manager" | "user"
+
 type UserProfile = {
   id: string
   email: string
   first_name: string
   last_name: string
   full_name: string
-  role: string
+  role: UserRole
   is_active: boolean
   department: string
   job_title: string
@@ -20,25 +22,10 @@ type UsersResponse = {
   error?: string
 }
 
-const roleLabels: Record<string, string> = {
-  owner: "Владелец",
-  admin: "Администратор",
-  mentor: "Наставник",
-  manager: "Менеджер",
-  user: "Пользователь",
-}
-
-const roleClasses: Record<string, string> = {
-  owner:
-    "border-amber-400/20 bg-amber-400/10 text-amber-200",
-  admin:
-    "border-rose-400/20 bg-rose-400/10 text-rose-200",
-  mentor:
-    "border-violet-400/20 bg-violet-400/10 text-violet-200",
-  manager:
-    "border-sky-400/20 bg-sky-400/10 text-sky-200",
-  user:
-    "border-white/10 bg-white/[0.04] text-white/55",
+type UpdateUserResponse = {
+  ok?: boolean
+  user?: UserProfile
+  error?: string
 }
 
 function getDisplayName(user: UserProfile) {
@@ -66,6 +53,7 @@ export function UsersAdminWorkspace() {
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [savingId, setSavingId] = useState<string | null>(null)
 
   async function loadUsers() {
     setLoading(true)
@@ -93,6 +81,51 @@ export function UsersAdminWorkspace() {
       )
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function updateUser(
+    userId: string,
+    patch: {
+      role?: UserRole
+      isActive?: boolean
+    },
+  ) {
+    setSavingId(userId)
+    setError("")
+
+    try {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(patch),
+      })
+
+      const data = (await response.json()) as UpdateUserResponse
+
+      if (!response.ok || !data.user) {
+        throw new Error(
+          data.error || "Не удалось обновить пользователя.",
+        )
+      }
+
+      setUsers((currentUsers) =>
+        currentUsers.map((user) =>
+          user.id === userId ? data.user! : user,
+        ),
+      )
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Не удалось обновить пользователя.",
+      )
+
+      await loadUsers()
+    } finally {
+      setSavingId(null)
     }
   }
 
@@ -173,9 +206,11 @@ export function UsersAdminWorkspace() {
           <p className="text-xs uppercase tracking-[0.16em] text-white/28">
             Аккаунтов
           </p>
+
           <p className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-white">
             {users.length}
           </p>
+
           <p className="mt-2 text-xs text-white/30">
             зарегистрировано
           </p>
@@ -185,9 +220,11 @@ export function UsersAdminWorkspace() {
           <p className="text-xs uppercase tracking-[0.16em] text-white/28">
             Активных
           </p>
+
           <p className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-emerald-300">
             {activeCount}
           </p>
+
           <p className="mt-2 text-xs text-white/30">
             имеют доступ
           </p>
@@ -197,9 +234,11 @@ export function UsersAdminWorkspace() {
           <p className="text-xs uppercase tracking-[0.16em] text-white/28">
             Администраторов
           </p>
+
           <p className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-violet-300">
             {adminCount}
           </p>
+
           <p className="mt-2 text-xs text-white/30">
             owner и admin
           </p>
@@ -223,21 +262,25 @@ export function UsersAdminWorkspace() {
         ) : null}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left">
+          <table className="w-full min-w-[980px] text-left">
             <thead className="border-b border-white/[0.055] text-[10px] uppercase tracking-[0.16em] text-white/24">
               <tr>
                 <th className="px-5 py-4 font-medium">
                   Пользователь
                 </th>
+
                 <th className="px-4 py-4 font-medium">
                   Роль
                 </th>
+
                 <th className="px-4 py-4 font-medium">
                   Должность
                 </th>
+
                 <th className="px-4 py-4 font-medium">
-                  Статус
+                  Доступ
                 </th>
+
                 <th className="px-5 py-4 font-medium">
                   Создан
                 </th>
@@ -245,75 +288,107 @@ export function UsersAdminWorkspace() {
             </thead>
 
             <tbody>
-              {filteredUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className="border-b border-white/[0.045] transition hover:bg-white/[0.025]"
-                >
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/35 to-fuchsia-500/20 text-xs font-semibold text-violet-100">
-                        {getInitials(user)}
+              {filteredUsers.map((user) => {
+                const isSaving = savingId === user.id
+
+                return (
+                  <tr
+                    key={user.id}
+                    className="border-b border-white/[0.045] transition hover:bg-white/[0.025]"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/35 to-fuchsia-500/20 text-xs font-semibold text-violet-100">
+                          {getInitials(user)}
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-medium text-white/88">
+                            {getDisplayName(user)}
+                          </p>
+
+                          <p className="mt-0.5 text-xs text-white/28">
+                            {user.email}
+                          </p>
+                        </div>
                       </div>
+                    </td>
 
-                      <div>
-                        <p className="text-sm font-medium text-white/88">
-                          {getDisplayName(user)}
-                        </p>
+                    <td className="px-4 py-4">
+                      <select
+                        value={user.role}
+                        disabled={isSaving}
+                        onChange={(event) =>
+                          void updateUser(user.id, {
+                            role: event.target.value as UserRole,
+                          })
+                        }
+                        className="min-w-36 rounded-lg border border-white/[0.08] bg-[#11151d] px-2.5 py-2 text-xs text-white/70 outline-none transition focus:border-violet-400/45 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="user">
+                          Пользователь
+                        </option>
 
-                        <p className="mt-0.5 text-xs text-white/28">
-                          {user.email}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
+                        <option value="mentor">
+                          Наставник
+                        </option>
 
-                  <td className="px-4 py-4">
-                    <span
-                      className={[
-                        "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold",
-                        roleClasses[user.role] ??
-                          roleClasses.user,
-                      ].join(" ")}
-                    >
-                      {roleLabels[user.role] ?? user.role}
-                    </span>
-                  </td>
+                        <option value="manager">
+                          Менеджер
+                        </option>
 
-                  <td className="px-4 py-4">
-                    <p className="text-sm text-white/65">
-                      {user.job_title || "Не указана"}
-                    </p>
+                        <option value="admin">
+                          Администратор
+                        </option>
 
-                    <p className="mt-1 text-xs text-white/28">
-                      {user.department || "Без отдела"}
-                    </p>
-                  </td>
+                        <option value="owner">
+                          Владелец
+                        </option>
+                      </select>
+                    </td>
 
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2 text-xs text-white/45">
-                      <span
+                    <td className="px-4 py-4">
+                      <p className="text-sm text-white/65">
+                        {user.job_title || "Не указана"}
+                      </p>
+
+                      <p className="mt-1 text-xs text-white/28">
+                        {user.department || "Без отдела"}
+                      </p>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() =>
+                          void updateUser(user.id, {
+                            isActive: !user.is_active,
+                          })
+                        }
                         className={[
-                          "size-2 rounded-full",
+                          "min-w-32 rounded-lg border px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
                           user.is_active
-                            ? "bg-emerald-400"
-                            : "bg-rose-400",
+                            ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15"
+                            : "border-rose-400/20 bg-rose-400/10 text-rose-200 hover:bg-rose-400/15",
                         ].join(" ")}
-                      />
+                      >
+                        {isSaving
+                          ? "Сохраняем..."
+                          : user.is_active
+                            ? "Активен"
+                            : "Заблокирован"}
+                      </button>
+                    </td>
 
-                      {user.is_active
-                        ? "Активен"
-                        : "Заблокирован"}
-                    </div>
-                  </td>
-
-                  <td className="px-5 py-4 text-sm text-white/38">
-                    {new Date(user.created_at).toLocaleDateString(
-                      "ru-RU",
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-5 py-4 text-sm text-white/38">
+                      {new Date(
+                        user.created_at,
+                      ).toLocaleDateString("ru-RU")}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
