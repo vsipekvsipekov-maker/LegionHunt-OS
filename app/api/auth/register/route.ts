@@ -31,48 +31,24 @@ function getErrorMessage(error: unknown): string {
     if (typeof record.error === "string") {
       return record.error
     }
-
-    try {
-      const serialized = JSON.stringify(error)
-
-      if (serialized && serialized !== "{}") {
-        return serialized
-      }
-    } catch {}
-
-    return Object.prototype.toString.call(error)
   }
 
   return "Неизвестная ошибка регистрации."
 }
 
 export async function POST(request: NextRequest) {
-  console.log("========== REGISTER START ==========")
-
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
     const secretKey = process.env.SUPABASE_SECRET_KEY?.trim()
 
-    console.log("ENV:", {
-      hasSupabaseUrl: !!supabaseUrl,
-      hasSecretKey: !!secretKey,
-      secretPrefix: secretKey?.substring(0, 12),
-    })
-
     if (!supabaseUrl || !secretKey) {
       return NextResponse.json(
-        {
-          error:
-            "На сервере отсутствуют NEXT_PUBLIC_SUPABASE_URL или SUPABASE_SECRET_KEY.",
-        },
+        { error: "Регистрация временно недоступна." },
         { status: 500 },
       )
     }
 
     const body = (await request.json()) as RegisterBody
-
-    console.log("BODY:", body)
-
     const firstName = body.firstName?.trim() ?? ""
     const lastName = body.lastName?.trim() ?? ""
     const email = body.email?.trim().toLowerCase() ?? ""
@@ -85,20 +61,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      secretKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: "Пароль должен содержать минимум 6 символов." },
+        { status: 400 },
+      )
+    }
 
-    console.log("Creating user:", email)
+    const supabaseAdmin = createClient(supabaseUrl, secretKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
 
-    const result = await supabaseAdmin.auth.admin.createUser({
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -109,48 +86,36 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log(
-      "CREATE USER RESULT:",
-      JSON.stringify(result, null, 2)
-    )
-
-    const { data, error } = result
-
     if (error) {
-      console.error("SUPABASE ERROR:")
-      console.error(error)
-      console.error(JSON.stringify(error, null, 2))
+      const message = getErrorMessage(error)
+      const duplicate =
+        message.toLowerCase().includes("already") ||
+        message.toLowerCase().includes("registered") ||
+        message.toLowerCase().includes("exists")
 
       return NextResponse.json(
         {
-          error: getErrorMessage(error),
+          error: duplicate
+            ? "Аккаунт с таким email уже существует."
+            : message,
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
-
-    console.log("USER CREATED:", data.user?.id)
 
     return NextResponse.json(
       {
         ok: true,
         userId: data.user?.id,
       },
-      { status: 201 }
+      { status: 201 },
     )
   } catch (error) {
-    console.error("UNEXPECTED ERROR:")
-    console.error(error)
-
-    try {
-      console.error(JSON.stringify(error, null, 2))
-    } catch {}
+    console.error("Registration error:", error)
 
     return NextResponse.json(
-      {
-        error: getErrorMessage(error),
-      },
-      { status: 500 }
+      { error: "Не удалось создать аккаунт." },
+      { status: 500 },
     )
   }
 }
