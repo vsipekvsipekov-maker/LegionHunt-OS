@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation"
 
 import { createClient } from "@/lib/supabase-client"
 
+type RegisterResponse = {
+  ok?: boolean
+  userId?: string
+  error?: string
+}
+
 export default function RegisterPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -16,14 +22,21 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     setError("")
-    setSuccess("")
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const normalizedFirstName = firstName.trim()
+    const normalizedLastName = lastName.trim()
+
+    if (!normalizedFirstName || !normalizedLastName || !normalizedEmail) {
+      setError("Заполни все поля.")
+      return
+    }
 
     if (password !== confirmPassword) {
       setError("Пароли не совпадают.")
@@ -37,35 +50,52 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+    try {
+      const registerResponse = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      },
-    })
+        body: JSON.stringify({
+          firstName: normalizedFirstName,
+          lastName: normalizedLastName,
+          email: normalizedEmail,
+          password,
+        }),
+      })
 
-    if (signUpError) {
-      setError(signUpError.message || "Не удалось создать аккаунт.")
-      setLoading(false)
-      return
-    }
+      const registerData =
+        (await registerResponse.json()) as RegisterResponse
 
-    if (data.session) {
+      if (!registerResponse.ok || !registerData.ok) {
+        throw new Error(
+          registerData.error || "Не удалось создать аккаунт.",
+        )
+      }
+
+      const { error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        })
+
+      if (signInError) {
+        throw new Error(
+          "Аккаунт создан, но автоматический вход не выполнен. Перейди на страницу входа.",
+        )
+      }
+
       router.push("/")
       router.refresh()
-      return
+    } catch (registerError) {
+      setError(
+        registerError instanceof Error
+          ? registerError.message
+          : "Не удалось создать аккаунт.",
+      )
+    } finally {
+      setLoading(false)
     }
-
-    setSuccess(
-      "Аккаунт создан. Проверь почту и подтверди email, затем войди в систему.",
-    )
-
-    setLoading(false)
   }
 
   return (
@@ -98,6 +128,7 @@ export default function RegisterPage() {
               <input
                 id="firstName"
                 type="text"
+                autoComplete="given-name"
                 required
                 value={firstName}
                 onChange={(event) => setFirstName(event.target.value)}
@@ -117,6 +148,7 @@ export default function RegisterPage() {
               <input
                 id="lastName"
                 type="text"
+                autoComplete="family-name"
                 required
                 value={lastName}
                 onChange={(event) => setLastName(event.target.value)}
@@ -182,7 +214,9 @@ export default function RegisterPage() {
               required
               minLength={6}
               value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
+              onChange={(event) =>
+                setConfirmPassword(event.target.value)
+              }
               className="h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-base text-white outline-none transition focus:border-white/40"
               placeholder="Повтори пароль"
             />
@@ -191,12 +225,6 @@ export default function RegisterPage() {
           {error ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               {error}
-            </div>
-          ) : null}
-
-          {success ? (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-              {success}
             </div>
           ) : null}
 
