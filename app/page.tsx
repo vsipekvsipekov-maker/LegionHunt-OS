@@ -6,6 +6,7 @@ import {
   CalendarIcon,
   ChartIcon,
   UsersIcon,
+  WalletIcon,
 } from "@/components/icons"
 import { DashboardShell } from "@/components/layout/shell"
 import { CrmFunnelChart } from "@/components/dashboard/crm-funnel-chart"
@@ -98,12 +99,14 @@ export default async function Home() {
       db.query<StageRow>(`
         SELECT status, COUNT(*)::text AS count
         FROM legionhunt_candidates
+        WHERE archived_at IS NULL
         GROUP BY status
       `),
       db.query<{ count: string }>(`
         SELECT COUNT(*)::text AS count
         FROM legionhunt_candidates
-        WHERE next_contact_at IS NOT NULL
+        WHERE archived_at IS NULL
+          AND next_contact_at IS NOT NULL
           AND next_contact_at < NOW()
           AND status <> 'active'
       `),
@@ -118,7 +121,8 @@ export default async function Home() {
           next_contact_at::text,
           updated_at::text
         FROM legionhunt_candidates
-        WHERE next_contact_at IS NOT NULL
+        WHERE archived_at IS NULL
+          AND next_contact_at IS NOT NULL
           AND next_contact_at >= NOW()
         ORDER BY next_contact_at ASC
         LIMIT 5
@@ -134,6 +138,7 @@ export default async function Home() {
           next_contact_at::text,
           updated_at::text
         FROM legionhunt_candidates
+        WHERE archived_at IS NULL
         ORDER BY updated_at DESC, id DESC
         LIMIT 6
       `),
@@ -147,7 +152,8 @@ export default async function Home() {
           INTERVAL '1 day'
         ) AS day_series(day)
         LEFT JOIN legionhunt_candidates c
-          ON c.created_at >= day_series.day
+          ON c.archived_at IS NULL
+         AND c.created_at >= day_series.day
          AND c.created_at < day_series.day + INTERVAL '1 day'
         GROUP BY day_series.day
         ORDER BY day_series.day
@@ -222,11 +228,11 @@ export default async function Home() {
   return (
     <DashboardShell>
       <div className="lh-page">
-        <section className="flex flex-col gap-4 border-b border-white/8 pb-5 sm:gap-6 sm:pb-8 lg:flex-row lg:items-end lg:justify-between">
+        <section className="flex flex-col gap-6 border-b border-white/8 pb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="lh-eyebrow">LegionHunt Command Center</p>
 
-            <h1 className="lh-title mt-2.5 sm:mt-3">
+            <h1 className="lh-title mt-3">
               Добро пожаловать, {displayName}
             </h1>
 
@@ -235,13 +241,13 @@ export default async function Home() {
             </p>
           </div>
 
-          <div className="flex min-h-11 w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-4 py-2.5 text-xs font-medium text-white/55 sm:w-auto">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-4 py-2.5 text-xs font-medium text-white/55">
             <span className="size-1.5 rounded-full bg-emerald-300" />
             Данные синхронизированы
           </div>
         </section>
 
-        <section className="mt-5 grid gap-3 sm:mt-7 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => {
             const Icon = metric.icon
 
@@ -249,11 +255,11 @@ export default async function Home() {
               <Link
                 key={metric.label}
                 href={metric.href}
-                className="lh-metric-card group"
+                className="lh-card lh-card-hover group p-5 sm:p-6"
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.045] text-white/68 sm:size-12">
-                    <Icon className="size-[22px] sm:size-5" />
+                  <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.045] text-white/68">
+                    <Icon className="size-5" />
                   </div>
 
                   <span className="text-xl text-white/22 transition group-hover:text-white/55">
@@ -261,15 +267,15 @@ export default async function Home() {
                   </span>
                 </div>
 
-                <p className="mt-5 text-[13px] font-medium text-white/45 sm:mt-7">
+                <p className="mt-7 text-[13px] font-medium text-white/45">
                   {metric.label}
                 </p>
 
-                <p className="mt-1.5 text-3xl font-semibold tracking-[-0.055em] text-white sm:mt-2 sm:text-4xl">
+                <p className="mt-2 text-4xl font-semibold tracking-[-0.055em] text-white">
                   {metric.value}
                 </p>
 
-                <p className="mt-2 text-xs leading-5 text-white/32 sm:mt-3">
+                <p className="mt-3 text-xs leading-5 text-white/32">
                   {metric.note}
                 </p>
               </Link>
@@ -277,12 +283,12 @@ export default async function Home() {
           })}
         </section>
 
-        <section className="lh-section-gap grid gap-4 sm:gap-5 xl:grid-cols-[1.35fr_0.85fr]">
-          <div className="lh-card lh-panel-padding">
+        <section className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
+          <div className="lh-card p-6 sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="lh-eyebrow">CRM Analytics</p>
-                <h2 className="lh-section-title mt-2">
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
                   Воронка кандидатов
                 </h2>
               </div>
@@ -301,10 +307,10 @@ export default async function Home() {
             />
           </div>
 
-          <div className="lh-card lh-panel-padding">
+          <div className="lh-card p-6 sm:p-7">
             <p className="lh-eyebrow">LEGION Intelligence</p>
 
-            <h2 className="lh-section-title mt-2">
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
               Оперативная сводка
             </h2>
 
@@ -341,12 +347,12 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="lh-section-gap grid gap-4 sm:gap-5 xl:grid-cols-[1fr_1fr]">
-          <div className="lh-card lh-panel-padding">
+        <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
+          <div className="lh-card p-6 sm:p-7">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="lh-eyebrow">Контакты</p>
-                <h2 className="lh-section-title mt-2">
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
                   Ближайшие действия
                 </h2>
               </div>
@@ -385,11 +391,11 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="lh-card lh-panel-padding">
+          <div className="lh-card p-6 sm:p-7">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="lh-eyebrow">Журнал</p>
-                <h2 className="lh-section-title mt-2">
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
                   Последние изменения
                 </h2>
               </div>
@@ -423,8 +429,8 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="lh-section-gap">
-          <div className="lh-card lh-panel-padding">
+        <section className="mt-5">
+          <div className="lh-card p-6 sm:p-7">
             <p className="lh-eyebrow">Быстрые действия</p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -40,8 +40,8 @@ export async function buildLegionContext(message: string): Promise<ContextResult
     courses: string
   }>(`
     SELECT
-      (SELECT count(*)::text FROM legionhunt_candidates) candidates,
-      (SELECT count(*)::text FROM legionhunt_candidates WHERE status='active') active_candidates,
+      (SELECT count(*)::text FROM legionhunt_candidates WHERE archived_at IS NULL) candidates,
+      (SELECT count(*)::text FROM legionhunt_candidates WHERE archived_at IS NULL AND status='active') active_candidates,
       (SELECT count(*)::text FROM legionhunt_team_members WHERE status <> 'inactive') members,
       (SELECT round(avg(kpi))::text FROM legionhunt_team_members WHERE status <> 'inactive') avg_kpi,
       (SELECT count(*)::text FROM legionhunt_wiki_articles) articles,

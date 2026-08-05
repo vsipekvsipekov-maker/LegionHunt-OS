@@ -20,6 +20,7 @@ type CandidateRow = {
   next_action: string
   note: string
   next_contact_at: string | null
+  archived_at: string | null
 }
 
 function serialize(row: CandidateRow) {
@@ -37,6 +38,7 @@ function serialize(row: CandidateRow) {
     nextAction: row.next_action,
     note: row.note,
     nextContactAt: row.next_contact_at,
+    archivedAt: row.archived_at,
   }
 }
 
@@ -64,10 +66,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       score?: number
       nextContactAt?: string | null
       updatedBy?: string
+      archived?: boolean
     }
 
     const previousResult = await db.query<CandidateRow>(
-      `SELECT id::text, name, username, country, source, mentor, status, priority, score, last_activity, next_action, note, next_contact_at::text FROM legionhunt_candidates WHERE id = $1`,
+      `SELECT id::text, name, username, country, source, mentor, status, priority, score, last_activity, next_action, note, next_contact_at::text, archived_at::text FROM legionhunt_candidates WHERE id = $1`,
       [candidateId],
     )
     const previous = previousResult.rows[0]
@@ -117,6 +120,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (body.nextContactAt !== undefined) {
       addUpdate("next_contact_at", body.nextContactAt || null, "Следующий контакт", previous.next_contact_at)
     }
+    if (body.archived !== undefined) {
+      addUpdate(
+        "archived_at",
+        body.archived ? new Date().toISOString() : null,
+        body.archived ? "Архив" : "Восстановление",
+        previous.archived_at,
+      )
+    }
+
 
     if (!updates.length) return NextResponse.json({ error: "Нет данных для обновления." }, { status: 400 })
 
@@ -124,7 +136,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     values.push(candidateId)
 
     const result = await db.query<CandidateRow>(
-      `UPDATE legionhunt_candidates SET ${updates.join(", ")} WHERE id = $${values.length} RETURNING id::text, name, username, country, source, mentor, status, priority, score, last_activity, next_action, note, next_contact_at::text`,
+      `UPDATE legionhunt_candidates SET ${updates.join(", ")} WHERE id = $${values.length} RETURNING id::text, name, username, country, source, mentor, status, priority, score, last_activity, next_action, note, next_contact_at::text, archived_at::text`,
       values,
     )
 
@@ -152,5 +164,52 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   } catch (error) {
     console.error("CRM PATCH error:", error)
     return NextResponse.json({ error: "Не удалось обновить кандидата." }, { status: 500 })
+  }
+}
+
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    await ensureCrmSchema()
+
+    const { id } = await context.params
+    const candidateId = Number(id)
+
+    if (!Number.isSafeInteger(candidateId) || candidateId <= 0) {
+      return NextResponse.json(
+        { error: "Некорректный ID кандидата." },
+        { status: 400 },
+      )
+    }
+
+    const result = await db.query<{ id: string; name: string }>(
+      `DELETE FROM legionhunt_candidates
+       WHERE id = $1 AND archived_at IS NOT NULL
+       RETURNING id::text, name`,
+      [candidateId],
+    )
+
+    const deleted = result.rows[0]
+
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Кандидат не найден в архиве." },
+        { status: 404 },
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      candidate: { id: Number(deleted.id), name: deleted.name },
+    })
+  } catch (error) {
+    console.error("CRM DELETE error:", error)
+    return NextResponse.json(
+      { error: "Не удалось удалить кандидата навсегда." },
+      { status: 500 },
+    )
   }
 }

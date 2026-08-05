@@ -64,6 +64,7 @@ async function initializeCrmSchema() {
       next_action TEXT NOT NULL DEFAULT '',
       note TEXT NOT NULL DEFAULT '',
       next_contact_at TIMESTAMPTZ NULL,
+      archived_at TIMESTAMPTZ NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT legionhunt_candidates_status_check
@@ -83,11 +84,17 @@ async function initializeCrmSchema() {
     ALTER TABLE legionhunt_candidates
       ADD COLUMN IF NOT EXISTS next_contact_at TIMESTAMPTZ NULL;
 
+    ALTER TABLE legionhunt_candidates
+      ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ NULL;
+
     CREATE INDEX IF NOT EXISTS legionhunt_candidates_updated_idx
       ON legionhunt_candidates(updated_at DESC);
 
     CREATE INDEX IF NOT EXISTS legionhunt_candidates_next_contact_idx
       ON legionhunt_candidates(next_contact_at);
+
+    CREATE INDEX IF NOT EXISTS legionhunt_candidates_archived_idx
+      ON legionhunt_candidates(archived_at, updated_at DESC);
 
     CREATE TABLE IF NOT EXISTS legionhunt_candidate_activity (
       id BIGSERIAL PRIMARY KEY,

@@ -16,6 +16,7 @@ type CandidateRow = {
   next_action: string
   note: string
   next_contact_at: string | null
+  archived_at: string | null
 }
 
 function serialize(row: CandidateRow) {
@@ -33,6 +34,7 @@ function serialize(row: CandidateRow) {
     nextAction: row.next_action,
     note: row.note,
     nextContactAt: row.next_contact_at,
+    archivedAt: row.archived_at,
   }
 }
 
@@ -41,10 +43,12 @@ async function seedIfEnabled() {
   return
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await ensureCrmSchema()
     await seedIfEnabled()
+
+    const archived = request.nextUrl.searchParams.get("archived") === "1"
 
     const result = await db.query<CandidateRow>(`
       SELECT
@@ -60,9 +64,11 @@ export async function GET() {
         last_activity,
         next_action,
         note,
-        next_contact_at::text
+        next_contact_at::text,
+        archived_at::text
       FROM legionhunt_candidates
-      ORDER BY updated_at DESC, id DESC
+      WHERE archived_at IS ${archived ? "NOT NULL" : "NULL"}
+      ORDER BY COALESCE(archived_at, updated_at) DESC, id DESC
     `)
 
     return NextResponse.json({
@@ -133,7 +139,8 @@ export async function POST(request: NextRequest) {
           last_activity,
           next_action,
           note,
-          next_contact_at::text
+          next_contact_at::text,
+          archived_at::text
       `,
       [
         name,
