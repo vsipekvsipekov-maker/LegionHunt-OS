@@ -4,7 +4,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase-server"
 
 type UpdateUserBody = {
-  role?: "owner" | "admin" | "mentor" | "manager" | "user"
+  role?: "owner" | "admin" | "mentor" | "recruiter"
   isActive?: boolean
 }
 
@@ -77,6 +77,20 @@ export async function PATCH(
 
     const { id } = await context.params
     const body = (await request.json()) as UpdateUserBody
+
+    const allowedRoles = new Set([
+      "owner",
+      "admin",
+      "mentor",
+      "recruiter",
+    ])
+
+    if (body.role !== undefined && !allowedRoles.has(body.role)) {
+      return NextResponse.json(
+        { error: "Недопустимая роль пользователя." },
+        { status: 400 },
+      )
+    }
 
     if (id === authorization.user.id && body.isActive === false) {
       return NextResponse.json(

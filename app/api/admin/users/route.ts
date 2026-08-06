@@ -1,12 +1,7 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 
 import { createClient } from "@/lib/supabase-server"
-
-type UpdateUserBody = {
-  role?: "owner" | "admin" | "mentor" | "recruiter"
-  isActive?: boolean
-}
 
 async function requireOwner() {
   const supabase = await createClient()
@@ -89,6 +84,8 @@ export async function GET() {
       .order("created_at", { ascending: false })
 
     if (error) {
+      console.error("Load users error:", error)
+
       return NextResponse.json(
         { error: error.message },
         { status: 400 },
@@ -99,102 +96,10 @@ export async function GET() {
       users: data ?? [],
     })
   } catch (error) {
-    console.error(error)
+    console.error("Admin users GET error:", error)
 
     return NextResponse.json(
       { error: "Не удалось загрузить пользователей." },
-      { status: 500 },
-    )
-  }
-}export async function PATCH(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> },
-) {
-  try {
-    const authorization = await requireOwner()
-
-    if ("error" in authorization) {
-      return authorization.error
-    }
-
-    const { id } = await context.params
-    const body = (await request.json()) as UpdateUserBody
-
-    const allowedRoles = new Set(["owner", "admin", "mentor", "recruiter"])
-
-    if (body.role !== undefined && !allowedRoles.has(body.role)) {
-      return NextResponse.json(
-        { error: "Недопустимая роль пользователя." },
-        { status: 400 },
-      )
-    }
-
-    if (id === authorization.user.id && body.isActive === false) {
-      return NextResponse.json(
-        { error: "Нельзя заблокировать собственный аккаунт." },
-        { status: 400 },
-      )
-    }
-
-    if (id === authorization.user.id && body.role !== undefined) {
-      return NextResponse.json(
-        { error: "Нельзя изменить собственную роль." },
-        { status: 400 },
-      )
-    }
-
-    const updateData: {
-      role?: UpdateUserBody["role"]
-      is_active?: boolean
-      updated_at: string
-    } = {
-      updated_at: new Date().toISOString(),
-    }
-
-    if (body.role !== undefined) {
-      updateData.role = body.role
-    }
-
-    if (body.isActive !== undefined) {
-      updateData.is_active = body.isActive
-    }
-
-    const admin = getAdminClient()
-
-    if (!admin) {
-      return NextResponse.json(
-        { error: "Не настроен административный доступ Supabase." },
-        { status: 500 },
-      )
-    }
-
-    const { data, error } = await admin
-      .from("profiles")
-      .update(updateData)
-      .eq("id", id)
-      .select(
-        "id, email, first_name, last_name, full_name, role, is_active, department, job_title, created_at",
-      )
-      .single()
-
-    if (error) {
-      console.error("Update user error:", error)
-
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 },
-      )
-    }
-
-    return NextResponse.json({
-      ok: true,
-      user: data,
-    })
-  } catch (error) {
-    console.error("Admin user PATCH error:", error)
-
-    return NextResponse.json(
-      { error: "Не удалось обновить пользователя." },
       { status: 500 },
     )
   }
