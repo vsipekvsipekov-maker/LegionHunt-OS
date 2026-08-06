@@ -145,6 +145,8 @@ export function WikiWorkspace() {
     "home" | "articles" | "cases" | "wiki" | "regulations" | "tools" | "aiKnowledge"
   >("home")
   const [showGlobalSearch, setShowGlobalSearch] = useState(false)
+  const [articleToDelete, setArticleToDelete] = useState<Article | null>(null)
+  const [deletingArticle, setDeletingArticle] = useState(false)
 
   async function loadArticles() {
     setLoading(true)
@@ -291,6 +293,59 @@ export function WikiWorkspace() {
     setSelected(payload.article)
     setDraft(payload.article)
     setEditing(false)
+  }
+
+  async function deleteArticle() {
+    if (!articleToDelete || deletingArticle) return
+
+    setDeletingArticle(true)
+    setError("")
+
+    try {
+      const deletingId = articleToDelete.id
+      const deletingIndex = articles.findIndex(
+        (article) => article.id === deletingId,
+      )
+
+      const response = await fetch(
+        `/api/wiki/articles/${deletingId}`,
+        { method: "DELETE" },
+      )
+
+      const contentType = response.headers.get("content-type") ?? ""
+      const payload = contentType.includes("application/json")
+        ? await response.json()
+        : { error: `Сервер вернул HTTP ${response.status}` }
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Не удалось удалить статью.")
+      }
+
+      const remaining = articles.filter(
+        (article) => article.id !== deletingId,
+      )
+      const replacement =
+        remaining[deletingIndex] ??
+        remaining[deletingIndex - 1] ??
+        remaining[0] ??
+        null
+
+      setArticles(remaining)
+      setSelected(replacement)
+      setDraft(replacement)
+      setEditing(false)
+      setArticleToDelete(null)
+
+      await loadNavigation()
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Не удалось удалить статью.",
+      )
+    } finally {
+      setDeletingArticle(false)
+    }
   }
 
   async function toggleFavorite(article: Article) {
@@ -656,13 +711,22 @@ export function WikiWorkspace() {
                       </button>
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setEditing(true)}
-                      className="h-8 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 text-[9px] text-white/45 hover:bg-white/[0.06] hover:text-white"
-                    >
-                      Редактировать
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setArticleToDelete(selected)}
+                        className="h-8 rounded-lg border border-rose-400/20 bg-rose-400/[0.06] px-3 text-[9px] font-semibold text-rose-200/80 transition hover:border-rose-400/35 hover:bg-rose-400/[0.12] hover:text-rose-100"
+                      >
+                        Удалить
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(true)}
+                        className="h-8 rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 text-[9px] font-semibold text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+                      >
+                        Редактировать
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -762,6 +826,48 @@ export function WikiWorkspace() {
           onSubmit={createArticle}
           onError={setError}
         />
+      )}
+
+      {articleToDelete && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deletingArticle) {
+              setArticleToDelete(null)
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#101116] p-6 shadow-2xl">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-300/80">
+              Удаление статьи
+            </p>
+            <h2 className="mt-3 text-xl font-bold leading-snug text-white">
+              Удалить «{articleToDelete.title}»?
+            </h2>
+            <p className="mt-3 text-sm font-medium leading-6 text-white/65">
+              Статья будет удалена из Wiki. Это действие нельзя отменить.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deletingArticle}
+                onClick={() => setArticleToDelete(null)}
+                className="h-10 rounded-xl border border-white/[0.1] px-4 text-xs font-semibold text-white/65 transition hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={deletingArticle}
+                onClick={() => void deleteArticle()}
+                className="h-10 rounded-xl bg-rose-500 px-4 text-xs font-bold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-400 disabled:opacity-50"
+              >
+                {deletingArticle ? "Удаляю..." : "Удалить статью"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showImport && (
@@ -3895,10 +4001,10 @@ function ArticleDocument({ article }: { article: Article }) {
   return (
     <article>
       <div className="border-b border-white/[0.06] pb-7">
-        <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-violet-300/60">{article.category}</p>
-        <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.04em] text-white md:text-[38px]">{article.title}</h1>
-        {article.excerpt && <p className="mt-4 max-w-2xl text-sm leading-6 text-white/38">{article.excerpt}</p>}
-        <div className="mt-5 flex flex-wrap items-center gap-3 text-[9px] text-white/22">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-200/85">{article.category}</p>
+        <h1 className="mt-3 text-3xl font-bold leading-tight tracking-[-0.035em] text-white md:text-[40px]">{article.title}</h1>
+        {article.excerpt && <p className="mt-4 max-w-2xl text-[15px] font-medium leading-7 text-white/68">{article.excerpt}</p>}
+        <div className="mt-5 flex flex-wrap items-center gap-3 text-[10px] font-medium text-white/45">
           <span>{article.author}</span><span>•</span>
           <span>Обновлено {formatDate(article.updatedAt)}</span><span>•</span>
           <span>{readingMinutes} мин чтения</span>
@@ -3907,9 +4013,9 @@ function ArticleDocument({ article }: { article: Article }) {
 
       {toc.length > 0 && (
         <div className="mt-7 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 xl:hidden">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/25">На этой странице</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/55">На этой странице</p>
           <div className="mt-3 space-y-2">
-            {toc.map((item) => <a key={item.id} href={`#${item.id}`} className="block text-[10px] text-white/35 hover:text-violet-200">{item.label}</a>)}
+            {toc.map((item) => <a key={item.id} href={`#${item.id}`} className="block text-[11px] font-medium text-white/60 hover:text-violet-200">{item.label}</a>)}
           </div>
         </div>
       )}
@@ -3938,7 +4044,7 @@ function MarkdownDocument({ content }: { content: string }) {
       blocks.push(
         <div key={`code-${index}`} className="my-5 overflow-hidden rounded-xl border border-white/[0.07] bg-black/35">
           <div className="border-b border-white/[0.06] px-4 py-2 text-[9px] uppercase tracking-[0.16em] text-white/20">{language}</div>
-          <pre className="overflow-x-auto p-4 text-xs leading-6 text-white/58"><code>{codeLines.join("\n")}</code></pre>
+          <pre className="overflow-x-auto p-4 text-[13px] font-medium leading-6 text-white/78"><code>{codeLines.join("\n")}</code></pre>
         </div>,
       )
       index += 1
@@ -3956,8 +4062,8 @@ function MarkdownDocument({ content }: { content: string }) {
       blocks.push(
         <div key={`table-${index}`} className="my-5 overflow-x-auto rounded-xl border border-white/[0.07]">
           <table className="w-full min-w-[520px] border-collapse text-left text-xs">
-            <thead className="bg-white/[0.04]"><tr>{rows[0].map((cell, i) => <th key={i} className="border-b border-white/[0.07] px-4 py-3 font-semibold text-white/60">{cell}</th>)}</tr></thead>
-            <tbody>{rows.slice(1).map((row, r) => <tr key={r} className="border-b border-white/[0.05] last:border-0">{row.map((cell, c) => <td key={c} className="px-4 py-3 text-white/42">{cell}</td>)}</tr>)}</tbody>
+            <thead className="bg-white/[0.04]"><tr>{rows[0].map((cell, i) => <th key={i} className="border-b border-white/[0.07] px-4 py-3 font-bold text-white/85">{cell}</th>)}</tr></thead>
+            <tbody>{rows.slice(1).map((row, r) => <tr key={r} className="border-b border-white/[0.05] last:border-0">{row.map((cell, c) => <td key={c} className="px-4 py-3 font-medium text-white/70">{cell}</td>)}</tr>)}</tbody>
           </table>
         </div>,
       )
@@ -4008,7 +4114,7 @@ function MarkdownLine({ line }: { line: string }) {
     return (
       <h1
         id={headingId(text)}
-        className="scroll-mt-20 pt-3 text-3xl font-semibold tracking-[-0.035em] text-white"
+        className="scroll-mt-20 pt-3 text-3xl font-bold tracking-[-0.03em] text-white"
       >
         {text}
       </h1>
@@ -4020,7 +4126,7 @@ function MarkdownLine({ line }: { line: string }) {
     return (
       <h2
         id={headingId(text)}
-        className="scroll-mt-20 border-b border-white/[0.06] pt-6 pb-3 text-xl font-semibold text-white/90"
+        className="scroll-mt-20 border-b border-white/[0.08] pt-6 pb-3 text-xl font-bold text-white"
       >
         {text}
       </h2>
@@ -4032,7 +4138,7 @@ function MarkdownLine({ line }: { line: string }) {
     return (
       <h3
         id={headingId(text)}
-        className="scroll-mt-20 pt-4 text-base font-semibold text-white/82"
+        className="scroll-mt-20 pt-4 text-base font-bold text-white/92"
       >
         {text}
       </h3>
@@ -4041,7 +4147,7 @@ function MarkdownLine({ line }: { line: string }) {
 
   if (line.startsWith("> [!IMPORTANT]")) {
     return (
-      <div className="border-l-2 border-rose-400 bg-rose-400/[0.045] px-4 py-3 text-sm leading-6 text-white/52">
+      <div className="border-l-2 border-rose-400 bg-rose-400/[0.06] px-4 py-3 text-[15px] font-medium leading-7 text-white/78">
         <strong className="text-rose-200">Важно:</strong>{" "}
         {line.replace("> [!IMPORTANT]", "").trim()}
       </div>
@@ -4050,7 +4156,7 @@ function MarkdownLine({ line }: { line: string }) {
 
   if (line.startsWith("> [!TIP]")) {
     return (
-      <div className="border-l-2 border-violet-400 bg-violet-400/[0.045] px-4 py-3 text-sm leading-6 text-white/52">
+      <div className="border-l-2 border-violet-400 bg-violet-400/[0.06] px-4 py-3 text-[15px] font-medium leading-7 text-white/78">
         <strong className="text-violet-200">Совет:</strong>{" "}
         {line.replace("> [!TIP]", "").trim()}
       </div>
@@ -4059,7 +4165,7 @@ function MarkdownLine({ line }: { line: string }) {
 
   if (line.startsWith("> ")) {
     return (
-      <blockquote className="border-l-2 border-violet-400 bg-violet-400/[0.035] px-4 py-3 text-sm italic leading-6 text-white/48">
+      <blockquote className="border-l-2 border-violet-400 bg-violet-400/[0.045] px-4 py-3 text-[15px] font-medium italic leading-7 text-white/72">
         {line.slice(2)}
       </blockquote>
     )
@@ -4067,7 +4173,7 @@ function MarkdownLine({ line }: { line: string }) {
 
   if (line.startsWith("- [ ] ")) {
     return (
-      <label className="flex items-start gap-3 text-sm leading-7 text-white/55">
+      <label className="flex items-start gap-3 text-[15px] font-medium leading-7 text-white/78">
         <input type="checkbox" className="mt-1.5 accent-violet-500" />
         <span>{line.slice(6)}</span>
       </label>
@@ -4090,7 +4196,7 @@ function MarkdownLine({ line }: { line: string }) {
 
   if (line.startsWith("- ")) {
     return (
-      <div className="flex items-start gap-3 text-sm leading-7 text-white/55">
+      <div className="flex items-start gap-3 text-[15px] font-medium leading-7 text-white/78">
         <span className="mt-0.5 text-violet-300">•</span>
         <span>{line.slice(2)}</span>
       </div>
@@ -4098,12 +4204,12 @@ function MarkdownLine({ line }: { line: string }) {
   }
 
   if (/^\d+\.\s/.test(line)) {
-    return <p className="text-sm leading-7 text-white/55">{line}</p>
+    return <p className="text-[15px] font-medium leading-7 text-white/78">{line}</p>
   }
 
   if (!line.trim()) return <div className="h-1" />
 
-  return <p className="text-sm leading-7 text-white/55">{line}</p>
+  return <p className="text-[15px] font-medium leading-7 text-white/78">{line}</p>
 }
 
 function RightRail({
@@ -4913,33 +5019,17 @@ function ImportDocument({
       data.set("file", file)
 
       const response = await fetch("/api/wiki/import", {
-  method: "POST",
-  body: data,
-})
+        method: "POST",
+        body: data,
+      })
+      const payload = await response.json()
 
-const raw = await response.text()
+      if (!response.ok) {
+        throw new Error(payload.error || "Ошибка импорта.")
+      }
 
-let payload: {
-  imported?: number
-  error?: string
-} = {}
-
-try {
-  payload = raw ? JSON.parse(raw) : {}
-} catch {
-  throw new Error(
-    `Сервер вернул не JSON:\n\n${raw.substring(0, 300)}`
-  )
-}
-
-if (!response.ok) {
-  throw new Error(
-    payload.error || `Ошибка сервера (${response.status})`
-  )
-}
-
-setStatus(`Готово. Создано статей: ${payload.imported}`)
-await onDone()
+      setStatus(`Готово. Создано статей: ${payload.imported}`)
+      await onDone()
     } catch (uploadError) {
       setStatus(
         uploadError instanceof Error
