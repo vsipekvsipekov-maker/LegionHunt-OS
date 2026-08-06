@@ -4913,17 +4913,33 @@ function ImportDocument({
       data.set("file", file)
 
       const response = await fetch("/api/wiki/import", {
-        method: "POST",
-        body: data,
-      })
-      const payload = await response.json()
+  method: "POST",
+  body: data,
+})
 
-      if (!response.ok) {
-        throw new Error(payload.error || "Ошибка импорта.")
-      }
+const raw = await response.text()
 
-      setStatus(`Готово. Создано статей: ${payload.imported}`)
-      await onDone()
+let payload: {
+  imported?: number
+  error?: string
+} = {}
+
+try {
+  payload = raw ? JSON.parse(raw) : {}
+} catch {
+  throw new Error(
+    `Сервер вернул не JSON:\n\n${raw.substring(0, 300)}`
+  )
+}
+
+if (!response.ok) {
+  throw new Error(
+    payload.error || `Ошибка сервера (${response.status})`
+  )
+}
+
+setStatus(`Готово. Создано статей: ${payload.imported}`)
+await onDone()
     } catch (uploadError) {
       setStatus(
         uploadError instanceof Error

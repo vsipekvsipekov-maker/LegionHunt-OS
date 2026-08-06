@@ -126,7 +126,6 @@ ${text.slice(0, 100_000)}
           },
         ],
         generationConfig: {
-          temperature: 0.2,
           maxOutputTokens: 8_000,
           responseMimeType: "application/json",
         },

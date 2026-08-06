@@ -290,7 +290,7 @@ export function CandidateProfileClient({ candidate, displayName }: Props) {
       </section>
 
       <section className="rounded-3xl border border-violet-400/15 bg-gradient-to-br from-violet-500/[0.08] to-fuchsia-500/[0.025] p-6">
-        <div className="flex items-center gap-2 text-violet-200">
+        <div className="flex items-center gap-2 text-violet-200"> 
           <BrainIcon className="size-5" />
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em]">LEGION Intelligence</p>
         </div>
@@ -331,7 +331,7 @@ export function CandidateProfileClient({ candidate, displayName }: Props) {
           border-color: rgba(196,181,253,.35);
         }
       `}</style>
-    </div>
+    </div > 
   )
 }
 
