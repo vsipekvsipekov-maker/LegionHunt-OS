@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 
+import {
+  accentValues,
+  applyAppearance,
+  type AccentName,
+} from "@/lib/appearance"
+
 type Settings = {
   displayName: string
   username: string
@@ -10,7 +16,7 @@ type Settings = {
   language: string
   timezone: string
   theme: string
-  accent: string
+  accent: AccentName
   compact: boolean
   animations: boolean
   browserNotifications: boolean
@@ -31,52 +37,10 @@ type Status = {
 const tabs = ["Профиль", "Интерфейс", "AI", "Уведомления", "Система"] as const
 
 const initial: Settings = {
-  displayName: "VSIPEK", username: "vsipek", email: "", role: "Leader", language: "ru",
+  displayName: "Пользователь", username: "", email: "", role: "Recruiter", language: "ru",
   timezone: "Europe/Vilnius", theme: "dark", accent: "violet", compact: false, animations: true,
   browserNotifications: true, emailNotifications: false, telegramNotifications: false, dailyDigest: true,
   aiModel: "gemini-3.6-flash", aiTemperature: 0.45, aiMaxTokens: 1200,
-}
-
-const accentValues: Record<
-  string,
-  { rgb: string; solid: string; soft: string }
-> = {
-  violet: {
-    rgb: "139 92 246",
-    solid: "#8b5cf6",
-    soft: "rgba(139, 92, 246, 0.16)",
-  },
-  blue: {
-    rgb: "59 130 246",
-    solid: "#3b82f6",
-    soft: "rgba(59, 130, 246, 0.16)",
-  },
-  emerald: {
-    rgb: "16 185 129",
-    solid: "#10b981",
-    soft: "rgba(16, 185, 129, 0.16)",
-  },
-  rose: {
-    rgb: "244 63 94",
-    solid: "#f43f5e",
-    soft: "rgba(244, 63, 94, 0.16)",
-  },
-}
-
-function applyAppearance(settings: Settings) {
-  const root = document.documentElement
-  const accent = accentValues[settings.accent] ?? accentValues.violet
-
-  root.dataset.accent = settings.accent
-  root.dataset.compact = String(settings.compact)
-  root.dataset.animations = String(settings.animations)
-
-  root.style.setProperty("--lh-accent-rgb", accent.rgb)
-  root.style.setProperty("--lh-accent", accent.solid)
-  root.style.setProperty("--lh-accent-soft", accent.soft)
-
-  root.classList.add("dark")
-  root.style.colorScheme = "dark"
 }
 
 function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -147,6 +111,16 @@ export function SettingsWorkspace() {
       const response = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings }) })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error)
+      applyAppearance(settings)
+      window.dispatchEvent(
+        new CustomEvent("legionhunt:appearance-change", {
+          detail: {
+            accent: settings.accent,
+            compact: settings.compact,
+            animations: settings.animations,
+          },
+        }),
+      )
       setMessage("Настройки сохранены")
     } catch (error) { setMessage(error instanceof Error ? error.message : "Ошибка сохранения") }
     finally { setSaving(false) }
@@ -178,10 +152,111 @@ export function SettingsWorkspace() {
             : undefined
         }>{tab}</button>)}</div>
 
-    {active === "Профиль" && <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
-      <Card title="Аккаунт"><div className="flex flex-col items-center text-center"><div className="flex size-24 items-center justify-center rounded-3xl border border-white/20 bg-white text-2xl font-bold text-black">{initials}</div><p className="mt-4 text-xl font-semibold text-white">{settings.displayName}</p><p className="mt-1 text-sm text-white/35">{settings.role}</p><span className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1 text-[10px] font-semibold text-emerald-300">ACTIVE SESSION</span></div></Card>
-      <Card title="Данные профиля" description="Основная информация владельца рабочего пространства"><div className="grid gap-4 sm:grid-cols-2"><Field label="Имя"><input className={inputClass} value={settings.displayName} onChange={e => setSettings({...settings, displayName:e.target.value})}/></Field><Field label="Username"><input className={inputClass} value={settings.username} onChange={e => setSettings({...settings, username:e.target.value})}/></Field><Field label="Email"><input type="email" className={inputClass} value={settings.email} onChange={e => setSettings({...settings, email:e.target.value})} placeholder="name@example.com"/></Field><Field label="Роль"><input className={inputClass} value={settings.role} onChange={e => setSettings({...settings, role:e.target.value})}/></Field><Field label="Язык"><select className={inputClass} value={settings.language} onChange={e => setSettings({...settings, language:e.target.value})}><option value="ru">Русский</option><option value="en">English</option></select></Field><Field label="Часовой пояс"><select className={inputClass} value={settings.timezone} onChange={e => setSettings({...settings, timezone:e.target.value})}><option>Europe/Vilnius</option><option>Europe/Moscow</option><option>Europe/Warsaw</option><option>UTC</option></select></Field></div></Card>
-    </div>}
+    {active === "Профиль" && (
+      <div className="grid gap-5 xl:grid-cols-[320px_1fr]">
+        <Card title="Аккаунт">
+          <div className="flex items-center gap-4 xl:flex-col xl:text-center">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white text-xl font-bold text-black sm:size-20 xl:size-24 xl:rounded-3xl xl:text-2xl">
+              {initials}
+            </div>
+
+            <div className="min-w-0 xl:mt-1">
+              <p className="truncate text-lg font-semibold text-white xl:text-xl">
+                {settings.displayName}
+              </p>
+              <p className="mt-1 text-sm text-white/35">{settings.role}</p>
+              <span className="mt-3 inline-flex rounded-lg border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1 text-[10px] font-semibold text-emerald-300">
+                ACTIVE SESSION
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          title="Данные профиля"
+          description="Данные текущего пользователя LegionHunt OS"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Имя">
+              <input
+                className={inputClass}
+                value={settings.displayName}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    displayName: event.target.value,
+                  })
+                }
+              />
+            </Field>
+
+            <Field label="Username">
+              <input
+                className={inputClass}
+                value={settings.username}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    username: event.target.value,
+                  })
+                }
+              />
+            </Field>
+
+            <Field label="Email">
+              <input
+                type="email"
+                className={`${inputClass} cursor-not-allowed opacity-60`}
+                value={settings.email}
+                readOnly
+              />
+            </Field>
+
+            <Field label="Роль">
+              <input
+                className={`${inputClass} cursor-not-allowed opacity-60`}
+                value={settings.role}
+                readOnly
+              />
+            </Field>
+
+            <Field label="Язык">
+              <select
+                className={inputClass}
+                value={settings.language}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    language: event.target.value,
+                  })
+                }
+              >
+                <option value="ru">Русский</option>
+                <option value="en">English</option>
+              </select>
+            </Field>
+
+            <Field label="Часовой пояс">
+              <select
+                className={inputClass}
+                value={settings.timezone}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    timezone: event.target.value,
+                  })
+                }
+              >
+                <option>Europe/Vilnius</option>
+                <option>Europe/Moscow</option>
+                <option>Europe/Warsaw</option>
+                <option>UTC</option>
+              </select>
+            </Field>
+          </div>
+        </Card>
+      </div>
+    )}
 
     {active === "Интерфейс" && <div className="grid gap-5 xl:grid-cols-2"><Card title="Внешний вид" description="Настрой внешний вид LegionHunt OS"><div className="grid gap-4"><Field label="Тема">
   <div className="flex h-11 items-center rounded-xl border border-white/[0.08] bg-black/20 px-3 text-sm text-white/70">
@@ -189,7 +264,7 @@ export function SettingsWorkspace() {
   </div>
 </Field><Field label="Акцент">
   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-    {["violet", "blue", "emerald", "rose"].map((color) => {
+    {(["violet", "blue", "emerald", "rose"] as const).map((color) => {
       const option = accentValues[color]
       const selected = settings.accent === color
 
