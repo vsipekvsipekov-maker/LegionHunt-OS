@@ -37,6 +37,48 @@ const initial: Settings = {
   aiModel: "gemini-3.6-flash", aiTemperature: 0.45, aiMaxTokens: 1200,
 }
 
+const accentValues: Record<
+  string,
+  { rgb: string; solid: string; soft: string }
+> = {
+  violet: {
+    rgb: "139 92 246",
+    solid: "#8b5cf6",
+    soft: "rgba(139, 92, 246, 0.16)",
+  },
+  blue: {
+    rgb: "59 130 246",
+    solid: "#3b82f6",
+    soft: "rgba(59, 130, 246, 0.16)",
+  },
+  emerald: {
+    rgb: "16 185 129",
+    solid: "#10b981",
+    soft: "rgba(16, 185, 129, 0.16)",
+  },
+  rose: {
+    rgb: "244 63 94",
+    solid: "#f43f5e",
+    soft: "rgba(244, 63, 94, 0.16)",
+  },
+}
+
+function applyAppearance(settings: Settings) {
+  const root = document.documentElement
+  const accent = accentValues[settings.accent] ?? accentValues.violet
+
+  root.dataset.accent = settings.accent
+  root.dataset.compact = String(settings.compact)
+  root.dataset.animations = String(settings.animations)
+
+  root.style.setProperty("--lh-accent-rgb", accent.rgb)
+  root.style.setProperty("--lh-accent", accent.solid)
+  root.style.setProperty("--lh-accent-soft", accent.soft)
+
+  root.classList.add("dark")
+  root.style.colorScheme = "dark"
+}
+
 function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5 sm:p-6">
     <h2 className="text-lg font-semibold tracking-[-0.03em] text-white">{title}</h2>
@@ -73,7 +115,10 @@ export function SettingsWorkspace() {
       const response = await fetch("/api/settings", { cache: "no-store" })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error)
-      setSettings(payload.settings)
+      setSettings({
+        ...payload.settings,
+        theme: "dark",
+      })
       setRuntimeModel(payload.runtimeModel)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка загрузки")
@@ -91,6 +136,10 @@ export function SettingsWorkspace() {
   // Initial data is loaded from two external API endpoints.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); void checkStatus() }, [load, checkStatus])
+
+  useEffect(() => {
+    applyAppearance(settings)
+  }, [settings])
 
   async function save() {
     setSaving(true); setMessage("")
@@ -110,19 +159,70 @@ export function SettingsWorkspace() {
   return <div className="space-y-6">
     <div className="flex flex-col gap-5 border-b border-white/[0.06] pb-6 xl:flex-row xl:items-end xl:justify-between">
       <div><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">LEGIONHUNT CONTROL CENTER</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">Settings</h1><p className="mt-3 max-w-2xl text-sm text-white/35">Профиль, интерфейс, AI, уведомления и состояние системы в одном месте.</p></div>
-      <button onClick={save} disabled={saving} className="h-11 rounded-xl bg-white px-5 text-sm font-semibold text-white shadow-[0_12px_35px_rgba(139,92,246,.28)] transition hover:bg-violet-400 disabled:opacity-50">{saving ? "Сохранение..." : "Сохранить изменения"}</button>
+      <button onClick={save} disabled={saving} className="h-11 rounded-xl px-5 text-sm font-semibold text-white transition disabled:opacity-50"
+        style={{
+          backgroundColor: "var(--lh-accent)",
+          boxShadow: "0 12px 35px rgb(var(--lh-accent-rgb) / 0.28)",
+        }}>{saving ? "Сохранение..." : "Сохранить изменения"}</button>
     </div>
 
     {message && <div className="rounded-xl border border-white/15 bg-white/[0.05] px-4 py-3 text-sm text-white/75">{message}</div>}
 
-    <div className="flex gap-2 overflow-x-auto pb-1">{tabs.map(tab => <button key={tab} onClick={() => setActive(tab)} className={`h-10 shrink-0 rounded-xl border px-4 text-sm transition ${active === tab ? "border-violet-400/30 bg-white/15 text-white" : "border-white/[0.07] bg-white/[0.02] text-white/40 hover:text-white/75"}`}>{tab}</button>)}</div>
+    <div className="flex gap-2 overflow-x-auto pb-1">{tabs.map(tab => <button key={tab} onClick={() => setActive(tab)} className={`h-10 shrink-0 rounded-xl border px-4 text-sm transition ${active === tab ? "text-white" : "border-white/[0.07] bg-white/[0.02] text-white/40 hover:text-white/75"}`}
+        style={
+          active === tab
+            ? {
+                borderColor: "rgb(var(--lh-accent-rgb) / 0.42)",
+                backgroundColor: "var(--lh-accent-soft)",
+              }
+            : undefined
+        }>{tab}</button>)}</div>
 
     {active === "Профиль" && <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
       <Card title="Аккаунт"><div className="flex flex-col items-center text-center"><div className="flex size-24 items-center justify-center rounded-3xl border border-white/20 bg-white text-2xl font-bold text-black">{initials}</div><p className="mt-4 text-xl font-semibold text-white">{settings.displayName}</p><p className="mt-1 text-sm text-white/35">{settings.role}</p><span className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1 text-[10px] font-semibold text-emerald-300">ACTIVE SESSION</span></div></Card>
       <Card title="Данные профиля" description="Основная информация владельца рабочего пространства"><div className="grid gap-4 sm:grid-cols-2"><Field label="Имя"><input className={inputClass} value={settings.displayName} onChange={e => setSettings({...settings, displayName:e.target.value})}/></Field><Field label="Username"><input className={inputClass} value={settings.username} onChange={e => setSettings({...settings, username:e.target.value})}/></Field><Field label="Email"><input type="email" className={inputClass} value={settings.email} onChange={e => setSettings({...settings, email:e.target.value})} placeholder="name@example.com"/></Field><Field label="Роль"><input className={inputClass} value={settings.role} onChange={e => setSettings({...settings, role:e.target.value})}/></Field><Field label="Язык"><select className={inputClass} value={settings.language} onChange={e => setSettings({...settings, language:e.target.value})}><option value="ru">Русский</option><option value="en">English</option></select></Field><Field label="Часовой пояс"><select className={inputClass} value={settings.timezone} onChange={e => setSettings({...settings, timezone:e.target.value})}><option>Europe/Vilnius</option><option>Europe/Moscow</option><option>Europe/Warsaw</option><option>UTC</option></select></Field></div></Card>
     </div>}
 
-    {active === "Интерфейс" && <div className="grid gap-5 xl:grid-cols-2"><Card title="Внешний вид" description="Настрой внешний вид LegionHunt OS"><div className="grid gap-4"><Field label="Тема"><select className={inputClass} value={settings.theme} onChange={e => setSettings({...settings, theme:e.target.value})}><option value="dark">Dark</option><option value="system">System</option><option value="light">Light (preview)</option></select></Field><Field label="Акцент"><div className="grid grid-cols-4 gap-3">{["violet","blue","emerald","rose"].map(color => <button key={color} onClick={() => setSettings({...settings, accent:color})} className={`h-12 rounded-xl border capitalize ${settings.accent === color ? "border-white/40 bg-white/10 text-white" : "border-white/[0.06] text-white/35"}`}>{color}</button>)}</div></Field></div></Card><Card title="Поведение"><div className="space-y-3"><Toggle value={settings.compact} onChange={compact => setSettings({...settings, compact})} label="Компактный режим" note="Уменьшает отступы в таблицах и карточках"/><Toggle value={settings.animations} onChange={animations => setSettings({...settings, animations})} label="Анимации" note="Плавные переходы и интерактивные эффекты"/></div></Card></div>}
+    {active === "Интерфейс" && <div className="grid gap-5 xl:grid-cols-2"><Card title="Внешний вид" description="Настрой внешний вид LegionHunt OS"><div className="grid gap-4"><Field label="Тема">
+  <div className="flex h-11 items-center rounded-xl border border-white/[0.08] bg-black/20 px-3 text-sm text-white/70">
+    Dark
+  </div>
+</Field><Field label="Акцент">
+  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    {["violet", "blue", "emerald", "rose"].map((color) => {
+      const option = accentValues[color]
+      const selected = settings.accent === color
+
+      return (
+        <button
+          key={color}
+          type="button"
+          onClick={() => setSettings({ ...settings, accent: color })}
+          aria-pressed={selected}
+          className="flex h-12 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-medium capitalize transition"
+          style={{
+            borderColor: selected
+              ? option.solid
+              : "rgba(255,255,255,0.08)",
+            backgroundColor: selected
+              ? option.soft
+              : "rgba(255,255,255,0.02)",
+            color: selected ? "#ffffff" : "rgba(255,255,255,0.42)",
+            boxShadow: selected
+              ? `0 0 0 1px ${option.soft}, 0 10px 28px ${option.soft}`
+              : "none",
+          }}
+        >
+          <span
+            className="size-2.5 rounded-full"
+            style={{ backgroundColor: option.solid }}
+          />
+          {color}
+        </button>
+      )
+    })}
+  </div>
+</Field></div></Card><Card title="Поведение"><div className="space-y-3"><Toggle value={settings.compact} onChange={compact => setSettings({...settings, compact})} label="Компактный режим" note="Уменьшает отступы в таблицах и карточках"/><Toggle value={settings.animations} onChange={animations => setSettings({...settings, animations})} label="Анимации" note="Плавные переходы и интерактивные эффекты"/></div></Card></div>}
 
     {active === "AI" && <div className="grid gap-5 xl:grid-cols-[1fr_420px]"><Card title="LEGION Intelligence" description="Параметры AI-помощника"><div className="grid gap-4 sm:grid-cols-2"><Field label="Предпочитаемая модель"><select className={inputClass} value={settings.aiModel} onChange={e => setSettings({...settings, aiModel:e.target.value})}><option value="gemini-3.6-flash">Gemini 3.6 Flash</option><option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option></select></Field><Field label="Runtime модель"><div className="flex h-11 items-center rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] px-3 text-sm text-emerald-300">{runtimeModel}</div></Field><Field label={`Температура: ${settings.aiTemperature}`}><input type="range" min="0" max="1" step="0.05" value={settings.aiTemperature} onChange={e => setSettings({...settings, aiTemperature:Number(e.target.value)})} className="w-full accent-white"/></Field><Field label="Максимум токенов"><input type="number" className={inputClass} value={settings.aiMaxTokens} onChange={e => setSettings({...settings, aiMaxTokens:Number(e.target.value)})}/></Field></div><p className="mt-4 text-xs text-amber-200/55">Изменение предпочитаемой модели сохраняется в профиле. Фактическая серверная модель задаётся через GEMINI_MODEL в .env.local.</p></Card><Card title="Статус AI"><StatusBadge ok={status?.ai.ok ?? false} title={status?.ai.ok ? "AI ONLINE" : "AI OFFLINE"} text={status?.ai.message ?? "Проверка..."}/><button onClick={checkStatus} className="mt-4 h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-white/60 hover:text-white">Проверить подключение</button></Card></div>}
 

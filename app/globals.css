@@ -49,6 +49,9 @@
 }
 
 :root {
+  --lh-accent-rgb: 139 92 246;
+  --lh-accent: #8b5cf6;
+  --lh-accent-soft: rgba(139, 92, 246, 0.16);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -141,11 +144,6 @@
   .lh-title { @apply text-3xl font-semibold tracking-[-0.045em] text-white sm:text-4xl xl:text-[44px]; }
   .lh-subtitle { @apply mt-3 max-w-3xl text-[15px] leading-7 text-white/48 sm:text-base; }
   .lh-card { @apply rounded-3xl border border-white/9 bg-white/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.22)]; }
-  .lh-section-title { @apply text-xl font-semibold tracking-[-0.035em] text-white sm:text-2xl; }
-  .lh-section-gap { @apply mt-4 sm:mt-5; }
-  .lh-panel-padding { @apply p-4 sm:p-6 lg:p-7; }
-  .lh-touch { @apply min-h-11 min-w-11; }
-  .lh-metric-card { @apply flex min-h-0 flex-col rounded-3xl border border-white/9 bg-white/[0.035] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] transition duration-200 hover:border-white/16 hover:bg-white/[0.052] sm:p-6; }
   .lh-card-hover { @apply transition duration-200 hover:border-white/16 hover:bg-white/[0.052]; }
   .lh-input { @apply h-12 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-[15px] text-white placeholder:text-white/28 focus:border-white/25 focus:outline-none focus:ring-2 focus:ring-white/8; }
   .lh-empty { @apply flex min-h-48 flex-col items-center justify-center rounded-3xl border border-dashed border-white/12 bg-white/[0.018] px-6 text-center; }
@@ -153,63 +151,58 @@
 
 * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
 
-@layer base {
-  html,
-  body {
-    max-width: 100%;
-    overflow-x: clip;
-  }
 
-  button,
-  a,
-  input,
-  select,
-  textarea {
-    -webkit-tap-highlight-color: transparent;
-  }
+/* LegionHunt appearance settings */
+html {
+  accent-color: var(--lh-accent);
 }
 
-@media (max-width: 639px) {
-  .lh-page {
-    width: 100%;
-  }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 72% 12%,
+      rgb(var(--lh-accent-rgb) / 0.10),
+      transparent 28%
+    );
+  transition: background 220ms ease;
+}
 
-  .lh-eyebrow {
-    font-size: 0.625rem;
-    letter-spacing: 0.18em;
-  }
+::selection {
+  background: rgb(var(--lh-accent-rgb) / 0.88);
+  color: white;
+}
 
-  .lh-title {
-    font-size: clamp(1.75rem, 8.5vw, 2.125rem);
-    line-height: 1.08;
-  }
+html[data-compact="true"] .lh-card {
+  border-radius: 1rem;
+}
 
-  .lh-subtitle {
-    margin-top: 0.625rem;
-    font-size: 0.875rem;
-    line-height: 1.5rem;
-  }
+html[data-compact="true"] main {
+  --lh-compact-factor: 0.82;
+}
 
-  .lh-card {
-    border-radius: 1.25rem;
-  }
+html[data-animations="false"] *,
+html[data-animations="false"] *::before,
+html[data-animations="false"] *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+}
 
-  .lh-panel-padding {
-    padding: 1rem;
-  }
 
-  .lh-metric-card {
-    min-height: 10.5rem;
-  }
+/* LegionHunt OS currently supports dark theme only */
+html,
+html.dark {
+  color-scheme: dark;
+  background: #000;
+}
 
-  .lh-section-title {
-    font-size: 1.125rem;
-    line-height: 1.35;
-  }
-
-  input,
-  select,
-  textarea {
-    font-size: 16px;
-  }
+html body {
+  background-color: #000;
+  color: #fff;
 }

@@ -323,24 +323,44 @@ function AuthField({
   onChange,
   placeholder,
 }: AuthFieldProps) {
+  const [passwordVisible, setPasswordVisible] = useState(false)
+  const isPassword = type === "password"
+  const resolvedType = isPassword && passwordVisible ? "text" : type
+
   return (
     <label className="block">
       <span className="mb-2 block text-sm font-medium text-white/65">
         {label}
       </span>
 
-      <input
-        id={id}
-        name={id}
-        type={type}
-        autoComplete={autoComplete}
-        required
-        minLength={type === "password" ? 6 : undefined}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-base text-white outline-none transition placeholder:text-white/22 focus:border-white/35 focus:ring-2 focus:ring-white/5"
-        placeholder={placeholder}
-      />
+      <span className="relative block">
+        <input
+          id={id}
+          name={id}
+          type={resolvedType}
+          autoComplete={autoComplete}
+          required
+          minLength={isPassword ? 6 : undefined}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={[
+            "h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-base text-white outline-none transition placeholder:text-white/22 focus:border-white/35 focus:ring-2 focus:ring-white/5",
+            isPassword ? "pr-20" : "",
+          ].join(" ")}
+          placeholder={placeholder}
+        />
+
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setPasswordVisible((current) => !current)}
+            aria-label={passwordVisible ? "Скрыть пароль" : "Показать пароль"}
+            className="absolute right-2 top-1/2 h-9 -translate-y-1/2 rounded-lg px-3 text-xs font-medium text-white/45 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            {passwordVisible ? "Скрыть" : "Показать"}
+          </button>
+        )}
+      </span>
     </label>
   )
 }
