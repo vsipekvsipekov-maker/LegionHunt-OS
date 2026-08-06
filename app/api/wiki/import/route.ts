@@ -4,7 +4,7 @@ import mammoth from "mammoth"
 import { db, ensureCrmSchema } from "@/lib/db"
 
 export const runtime = "nodejs"
-export const maxDuration = 60
+export const maxDuration = 300
 
 type GeneratedArticle = {
   title: string
@@ -13,15 +13,21 @@ type GeneratedArticle = {
   content: string
 }
 
-type GeminiResponse = {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{ text?: string }>
-    }
+type OpenAIFileResponse = {
+  id?: string
+  error?: { message?: string }
+}
+
+type OpenAIResponse = {
+  output_text?: string
+  output?: Array<{
+    type?: string
+    content?: Array<{
+      type?: string
+      text?: string
+    }>
   }>
-  error?: {
-    message?: string
-  }
+  error?: { message?: string }
 }
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024
@@ -55,9 +61,7 @@ function extractJson(text: string): GeneratedArticle[] {
     throw new Error("AI не вернул список статей.")
   }
 
-  const parsed = JSON.parse(
-    cleaned.slice(firstBracket, lastBracket + 1),
-  ) as unknown
+  const parsed = JSON.parse(cleaned.slice(firstBracket, lastBracket + 1)) as unknown
 
   if (!Array.isArray(parsed)) {
     throw new Error("Некорректный формат результата AI.")
@@ -66,9 +70,7 @@ function extractJson(text: string): GeneratedArticle[] {
   return parsed
     .filter((item): item is GeneratedArticle => {
       if (!item || typeof item !== "object") return false
-
       const record = item as Record<string, unknown>
-
       return (
         typeof record.title === "string" &&
         typeof record.category === "string" &&
@@ -79,22 +81,93 @@ function extractJson(text: string): GeneratedArticle[] {
     .slice(0, 10)
 }
 
-async function generateFromText(
-  text: string,
-  filename: string,
-  apiKey: string,
-  model: string,
-) {
-  const prompt = `
+function readOpenAIText(payload: OpenAIResponse) {
+  if (typeof payload.output_text === "string") {
+    return payload.output_text.trim()
+  }
+
+  return (
+    payload.output
+      ?.flatMap((item) => item.content ?? [])
+      .filter((part) => part.type === "output_text")
+      .map((part) => part.text ?? "")
+      .join("\n")
+      .trim() ?? ""
+  )
+}
+
+async function readJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const raw = await response.text()
+  let payload: T
+
+  try {
+    payload = JSON.parse(raw) as T
+  } catch {
+    throw new Error(raw.trim().slice(0, 500) || `${fallbackMessage} HTTP ${response.status}.`)
+  }
+
+  if (!response.ok) {
+    const record = payload as { error?: { message?: string } }
+    throw new Error(record.error?.message || `${fallbackMessage} HTTP ${response.status}.`)
+  }
+
+  return payload
+}
+
+async function createOpenAIResponse({
+  apiKey,
+  model,
+  content,
+}: {
+  apiKey: string
+  model: string
+  content: Array<
+    | { type: "input_text"; text: string }
+    | { type: "input_file"; file_id: string }
+  >
+}) {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      input: [{ role: "user", content }],
+      max_output_tokens: 8_000,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(240_000),
+  })
+
+  const payload = await readJsonResponse<OpenAIResponse>(
+    response,
+    "OpenAI API вернул ошибку.",
+  )
+
+  const answer = readOpenAIText(payload)
+  if (!answer) throw new Error("OpenAI не вернул текстовый результат.")
+
+  return extractJson(answer)
+}
+
+function articlePrompt(filename: string) {
+  return `
 Ты создаёшь внутреннюю базу знаний LEGION Wiki.
 
 Преобразуй документ "${filename}" в 1–10 самостоятельных статей.
-Сохраняй факты, терминологию и правила исходного документа.
-Не добавляй выдуманные сведения.
-Разделяй материал логически: регламенты, инструкции, скрипты,
-возражения, обучение, FAQ и другие естественные темы.
 
-Верни ТОЛЬКО JSON-массив без Markdown-обёртки:
+Правила:
+- используй только сведения из документа;
+- не добавляй выдуманные факты;
+- сохраняй терминологию, инструкции и правила;
+- разделяй материал логически;
+- каждая статья должна быть понятна отдельно;
+- content оформляй в Markdown;
+- верни только JSON-массив без пояснений и Markdown-обёртки.
+
+Формат:
 [
   {
     "title": "Название статьи",
@@ -103,54 +176,76 @@ async function generateFromText(
     "content": "# Заголовок\\n\\nТекст статьи в Markdown"
   }
 ]
-
-Документ:
-${text.slice(0, 100_000)}
 `.trim()
+}
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model,
-    )}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
+async function generateFromText(
+  text: string,
+  filename: string,
+  apiKey: string,
+  model: string,
+) {
+  return createOpenAIResponse({
+    apiKey,
+    model,
+    content: [
+      {
+        type: "input_text",
+        text: `${articlePrompt(filename)}\n\nДокумент:\n${text.slice(0, 120_000)}`,
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
-          maxOutputTokens: 8_000,
-          responseMimeType: "application/json",
-        },
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(55_000),
-    },
+    ],
+  })
+}
+
+async function uploadOpenAIFile(
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+  apiKey: string,
+) {
+  const formData = new FormData()
+  formData.set("purpose", "user_data")
+
+  const fileBytes = new Uint8Array(buffer)
+
+  formData.set(
+    "file",
+    new File([fileBytes], filename, {
+      type: mimeType,
+    }),
   )
 
-  const payload = (await response.json()) as GeminiResponse
+  const response = await fetch("https://api.openai.com/v1/files", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: formData,
+    cache: "no-store",
+    signal: AbortSignal.timeout(120_000),
+  })
 
-  if (!response.ok) {
-    throw new Error(
-      payload.error?.message ||
-        `Gemini API вернул HTTP ${response.status}.`,
-    )
+  const payload = await readJsonResponse<OpenAIFileResponse>(
+    response,
+    "Не удалось загрузить PDF в OpenAI.",
+  )
+
+  if (!payload.id) {
+    throw new Error("OpenAI не вернул идентификатор загруженного файла.")
   }
 
-  const answer =
-    payload.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("\n")
-      .trim() ?? ""
+  return payload.id
+}
 
-  return extractJson(answer)
+async function deleteOpenAIFile(fileId: string, apiKey: string) {
+  try {
+    await fetch(`https://api.openai.com/v1/files/${encodeURIComponent(fileId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+    })
+  } catch (error) {
+    console.error("OpenAI temporary file cleanup error:", error)
+  }
 }
 
 async function generateFromPdf(
@@ -159,95 +254,30 @@ async function generateFromPdf(
   apiKey: string,
   model: string,
 ) {
-  const prompt = `
-Преобразуй приложенный PDF "${filename}" в 1–10 статей для LEGION Wiki.
+  const fileId = await uploadOpenAIFile(buffer, filename, "application/pdf", apiKey)
 
-Правила:
-- используй только сведения из PDF;
-- не выдумывай отсутствующие детали;
-- сохраняй терминологию документа;
-- разделяй материал на логичные самостоятельные статьи;
-- возвращай только JSON-массив.
-
-Формат:
-[
-  {
-    "title": "Название",
-    "category": "Категория",
-    "excerpt": "Краткое описание",
-    "content": "# Заголовок\\n\\nСтатья в Markdown"
-  }
-]
-`.trim()
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+  try {
+    return await createOpenAIResponse({
+      apiKey,
       model,
-    )}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: "application/pdf",
-                  data: buffer.toString("base64"),
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 8_000,
-          responseMimeType: "application/json",
-        },
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(55_000),
-    },
-  )
-
-  const payload = (await response.json()) as GeminiResponse
-
-  if (!response.ok) {
-    throw new Error(
-      payload.error?.message ||
-        `Gemini API вернул HTTP ${response.status}.`,
-    )
+      content: [
+        { type: "input_text", text: articlePrompt(filename) },
+        { type: "input_file", file_id: fileId },
+      ],
+    })
+  } finally {
+    await deleteOpenAIFile(fileId, apiKey)
   }
-
-  const answer =
-    payload.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("\n")
-      .trim() ?? ""
-
-  return extractJson(answer)
 }
 
-async function insertArticles(
-  articles: GeneratedArticle[],
-  filename: string,
-) {
+async function insertArticles(articles: GeneratedArticle[], filename: string) {
   const inserted = []
 
   for (const article of articles) {
     const title = article.title.trim().slice(0, 220)
-
     if (!title || !article.content.trim()) continue
 
-    const slug = `${
-      slugify(title) || "imported-article"
-    }-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+    const slug = `${slugify(title) || "imported-article"}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 
     const result = await db.query<{
       id: string
@@ -284,13 +314,12 @@ export async function POST(request: NextRequest) {
   try {
     await ensureCrmSchema()
 
-    const apiKey = process.env.GEMINI_API_KEY?.trim()
-    const model =
-      process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash"
+    const apiKey = process.env.OPENAI_API_KEY?.trim()
+    const model = process.env.OPENAI_MODEL?.trim() || "gpt-5-mini"
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "На сервере не настроен GEMINI_API_KEY." },
+        { error: "На сервере не настроен OPENAI_API_KEY." },
         { status: 500 },
       )
     }
@@ -299,17 +328,11 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file")
 
     if (!(file instanceof File)) {
-      return NextResponse.json(
-        { error: "Файл не выбран." },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Файл не выбран." }, { status: 400 })
     }
 
     if (file.size <= 0) {
-      return NextResponse.json(
-        { error: "Файл пустой." },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Файл пустой." }, { status: 400 })
     }
 
     if (file.size > MAX_FILE_BYTES) {
@@ -332,12 +355,7 @@ export async function POST(request: NextRequest) {
     let articles: GeneratedArticle[]
 
     if (extension === "pdf") {
-      articles = await generateFromPdf(
-        buffer,
-        file.name,
-        apiKey,
-        model,
-      )
+      articles = await generateFromPdf(buffer, file.name, apiKey, model)
     } else {
       let text = ""
 
@@ -355,12 +373,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      articles = await generateFromText(
-        text,
-        file.name,
-        apiKey,
-        model,
-      )
+      articles = await generateFromText(text, file.name, apiKey, model)
     }
 
     if (!articles.length) {
@@ -375,9 +388,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       imported: inserted.length,
       articles: inserted,
+      provider: "openai",
+      model,
     })
   } catch (error) {
-    console.error("Wiki import error:", error)
+    console.error("Wiki OpenAI import error:", error)
 
     return NextResponse.json(
       {
