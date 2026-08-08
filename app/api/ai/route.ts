@@ -67,9 +67,17 @@ async function callOpenAI(
       model,
       instructions: SYSTEM_PROMPT,
       input: input.map((message) => ({
-        role: message.role,
-        content: [{ type: "input_text", text: message.content }],
-      })),
+  role: message.role,
+  content: [
+    {
+      type:
+        message.role === "assistant"
+          ? ("output_text" as const)
+          : ("input_text" as const),
+      text: message.content,
+    },
+  ],
+})),
       max_output_tokens: 1200,
     }),
     cache: "no-store",
