@@ -97,16 +97,20 @@ ${source.content.slice(0, 700)}`,
   return `${notice}\n\n${preview}`
 }
 
-function extractOpenAIText(payload: OpenAIResponse) {
+function extractOpenAIText(payload: any): string {
+  if (typeof payload?.output_text === "string") {
+    return payload.output_text.trim()
+  }
+
   const chunks: string[] = []
 
-  for (const output of payload.output ?? []) {
-    if (output.type !== "message") continue
+  for (const item of payload?.output ?? []) {
+    if (item?.type !== "message") continue
 
-    for (const part of output.content ?? []) {
+    for (const part of item?.content ?? []) {
       if (
-        part.type === "output_text" &&
-        typeof part.text === "string"
+        part?.type === "output_text" &&
+        typeof part?.text === "string"
       ) {
         chunks.push(part.text)
       }
